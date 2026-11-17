@@ -1,0 +1,28 @@
+# NASA datasets
+data/raw/*
+data/processed/*
+
+# Generated files
+results/*
+logs/*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Java
+*.class
+target/
+
+# Environment
+.env
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Temporary raw batches
+data/work/

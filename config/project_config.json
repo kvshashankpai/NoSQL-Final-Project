@@ -1,0 +1,38 @@
+{
+  "project": "DAS839_NoSQL_Final_Project",
+  "dataset": {
+    "name": "NASA_HTTP_Web_Server_Logs",
+    "input_files": [
+      "data/raw/NASA_access_log_Jul95",
+      "data/raw/NASA_access_log_Aug95"
+    ],
+    "input_order": [
+      "NASA_access_log_Jul95",
+      "NASA_access_log_Aug95"
+    ]
+  },
+  "batching": {
+    "default_batch_size": 1000000,
+    "batch_id_start": 1,
+    "preserve_raw_bytes": true,
+    "temporary_directory": "data/work"
+  },
+  "database": {
+    "type": "PostgreSQL",
+    "database_name": "nosql_final_project"
+  },
+  "frontend": {
+    "framework": "Streamlit"
+  },
+  "pipelines": [
+    "Pig",
+    "MapReduce",
+    "MongoDB",
+    "Hive"
+  ],
+  "queries": [
+    "Q1_Daily_Traffic_Summary",
+    "Q2_Top_Requested_Resources",
+    "Q3_Hourly_Error_Analysis"
+  ]
+}
