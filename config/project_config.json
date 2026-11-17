@@ -9,27 +9,79 @@
     "input_order": [
       "NASA_access_log_Jul95",
       "NASA_access_log_Aug95"
-    ]
+    ],
+    "encoding": "ISO-8859-1",
+    "record_definition": "One physical line per input record"
   },
   "batching": {
     "default_batch_size": 1000000,
     "batch_id_start": 1,
-    "preserve_raw_bytes": true,
-    "temporary_directory": "data/work"
+    "batch_id_rule": "floor((record_number - 1) / batch_size) + 1",
+    "owner": "Selected backend adapter",
+    "record_numbering": "Continuous across input files",
+    "include_final_partial_batch": true,
+    "temporary_directory": "data/work",
+    "central_controller_creates_batches": false
+  },
+  "pipelines": {
+    "execution_mode": "Exactly one selected pipeline per run",
+    "adapters": [
+      {
+        "name": "Pig",
+        "directory": "pipelines/pig"
+      },
+      {
+        "name": "MapReduce",
+        "directory": "pipelines/mapreduce"
+      },
+      {
+        "name": "MongoDB",
+        "directory": "pipelines/mongodb"
+      },
+      {
+        "name": "Hive",
+        "directory": "pipelines/hive"
+      }
+    ],
+    "adapter_cli": {
+      "batch_size": "--batch-size",
+      "output_directory": "--output-dir",
+      "input_file": "--input",
+      "input_argument_rule": "Repeat --input for each file in the configured order"
+    }
   },
   "database": {
     "type": "PostgreSQL",
-    "database_name": "nosql_final_project"
+    "database_name": "nosql_final_project",
+    "purpose": "Common reporting and execution metadata storage"
   },
   "frontend": {
     "framework": "Streamlit"
   },
-  "pipelines": [
-    "Pig",
-    "MapReduce",
-    "MongoDB",
-    "Hive"
-  ],
+  "controller": {
+    "language": "Python",
+    "responsibilities": [
+      "Pipeline selection and orchestration",
+      "Run ID generation",
+      "Runtime measurement",
+      "Adapter invocation",
+      "Output validation",
+      "Transactional PostgreSQL loading"
+    ]
+  },
+  "output": {
+    "format": "JSONL",
+    "encoding": "UTF-8",
+    "files": [
+      "batches.jsonl",
+      "daily_traffic.jsonl",
+      "top_resources.jsonl",
+      "hourly_errors.jsonl",
+      "malformed_samples.jsonl"
+    ],
+    "whole_run_batch_id": null,
+    "malformed_sample_limit": 100
+  },
   "queries": [
     "Q1_Daily_Traffic_Summary",
     "Q2_Top_Requested_Resources",

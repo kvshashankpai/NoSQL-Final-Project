@@ -1,32 +1,40 @@
-# NASA datasets
+# NASA source datasets (keep locally; do not commit)
 data/raw/*
-data/processed/*
+!data/raw/.gitkeep
 
-# Generated files
-results/*
-logs/*
+# Processed data and temporary working files
+data/processed/*
+!data/processed/.gitkeep
+data/work/
+
+# Generated run outputs and logs
+results/
+outputs/
+logs/
+runs/
 
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
 venv/
+.pytest_cache/
+.mypy_cache/
 
 # Java
 *.class
 target/
 
-# Environment
+# Environment and secrets
 .env
+.env.*
+!.env.example
 
-# IDE and OS
+# IDE and operating system
 .idea/
 .vscode/
 .DS_Store
 
-# Temporary raw batches
-data/work/
-
-# Preserve directory structure while excluding actual datasets
-!data/raw/.gitkeep
-!data/processed/.gitkeep
+# Temporary files
+*.tmp
+*.log

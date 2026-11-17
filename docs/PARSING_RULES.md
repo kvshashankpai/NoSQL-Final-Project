@@ -1,196 +1,231 @@
 # Common Parsing Rules
+
 ## DAS 839 - NoSQL Systems End Semester Project
 
 ## 1. Raw Input Format
 
 Each input record follows the NASA HTTP log format:
 
-host ident authuser [timestamp] "request" status bytes
+`host ident authuser [timestamp] "request" status bytes`
 
 Example:
 
-199.72.81.55 - - [01/Jul/1995:00:00:01 -0400] "GET /history/apollo/ HTTP/1.0" 200 6245
+`199.72.81.55 - - [01/Jul/1995:00:00:01 -0400] "GET /history/apollo/ HTTP/1.0" 200 6245`
 
-The ident and authuser fields are not required in the
-structured output.
+The ident and authuser fields are not required in the structured output.
 
-## 2. Required Structured Fields
+Input encoding is ISO-8859-1. Each physical line is one input record. The backend adapter removes only the line terminator before parsing.
 
-| Field | Type |
-|---|---|
-| host | STRING |
-| timestamp | STRING |
-| log_date | DATE |
-| log_hour | INTEGER |
-| http_method | STRING / NULL |
-| resource_path | STRING / NULL |
-| protocol_version | STRING / NULL |
-| status_code | INTEGER |
-| bytes_transferred | BIGINT |
+## 2. Common Structured Schema
+
+| Field | Type | Description |
+|---|---|---|
+| host | STRING | Requesting host |
+| timestamp | STRING | Original logged timestamp |
+| log_date | DATE | Date extracted from timestamp |
+| log_hour | INTEGER | Hour extracted from timestamp |
+| http_method | STRING / NULL | HTTP method |
+| resource_path | STRING / NULL | Requested resource |
+| protocol_version | STRING / NULL | HTTP protocol |
+| status_code | INTEGER | HTTP response status |
+| bytes_transferred | BIGINT | Bytes returned |
+
+Processing metadata:
+
+- `source_file`
+- `record_number`
+- `batch_id`
+
+Record numbering is continuous across the July and August input files.
 
 ## 3. Host Extraction
 
-- Extract the first field.
-- Preserve the original value.
-- Do not normalize case or perform DNS resolution.
-- Missing host or host represented by '-' is malformed.
+- Extract the first field as host.
+- Preserve its original value and case.
+- Do not perform DNS resolution or normalization.
+- Missing host or host represented by `-` is malformed.
 
 ## 4. Timestamp Extraction
 
-Expected format:
+Expected timestamp format:
 
-DD/Mon/YYYY:HH:MM:SS +/-HHMM
+`DD/Mon/YYYY:HH:MM:SS +/-HHMM`
 
 Example:
 
-01/Jul/1995:00:00:01 -0400
+`01/Jul/1995:00:00:01 -0400`
 
 Rules:
 
-- Preserve the original timestamp.
-- Parse using the corresponding date-time format.
-- Derive log_date in YYYY-MM-DD format.
-- Derive log_hour as an integer from 0 to 23.
+- Preserve the original timestamp string.
+- Validate the date and time.
+- Use English three-letter month abbreviations.
+- Derive `log_date` in `YYYY-MM-DD` format.
+- Derive `log_hour` as an integer from 0 to 23.
 - Preserve the original logged clock time.
 - Do not convert timestamps to UTC or machine-local time.
 
 Invalid or missing timestamps make the record malformed.
 
-## 5. HTTP Request Parsing
+## 5. Outer Record Parsing
+
+The parser must identify:
+
+1. Host.
+2. Timestamp enclosed in square brackets.
+3. Request enclosed in double quotes.
+4. Three-digit numeric status code.
+5. Optional bytes field.
+
+Horizontal spaces and tabs may separate the outer fields.
+
+The closing request quote must be identified before extracting the status and optional bytes fields.
+
+The bytes field may be absent.
+
+An absent bytes field or a bytes value of `-` is interpreted as zero.
+
+The parser must reject an invalid outer structure rather than silently accepting a partial record.
+
+## 6. HTTP Request Parsing
 
 The request is enclosed in double quotes.
 
 Example:
 
-"GET /history/apollo/ HTTP/1.0"
+`"GET /history/apollo/ HTTP/1.0"`
 
-Split the request into:
+Trim horizontal whitespace from the request before splitting it on horizontal whitespace.
 
-- First component: http_method
-- Second component: resource_path
-- Third component: protocol_version
+When request tokens exist:
+
+- First token: `http_method`
+- Second token: `resource_path`
+- Third token: `protocol_version`
 
 Rules:
 
-- Preserve the original method and its case.
-- Preserve the resource path exactly.
+- Preserve method, resource path and protocol exactly as supplied.
+- Preserve host and resource path case.
 - Preserve query parameters.
 - Do not URL-decode or normalize resource paths.
 - Do not remove query parameters.
-- A request represented by "-" is valid, with all
-  three request components set to NULL.
-- If only one or two components are present, extract
-  the available components and set missing components
-  to NULL.
-- A non-empty request with more than three
-  whitespace-separated components is malformed.
-- An unclosed or structurally invalid quoted request
-  makes the record malformed.
+- A request represented by `-` is valid, with all three request fields set to NULL.
+- An empty request is valid, with all three request fields set to NULL.
+- If one or two tokens are present, extract the available fields and set missing fields to NULL.
+- If more than three tokens are present, retain the first token as `http_method` and set both `resource_path` and `protocol_version` to NULL.
+- A request with more than three tokens is not malformed solely because of its token count.
 
-## 6. Status Code
+An unclosed or structurally invalid quoted request makes the record malformed.
+
+## 7. Status Code
 
 - Extract the response status.
 - Store it as an integer.
-- Require a valid three-digit numeric status.
+- Require exactly three numeric digits.
 - Missing or invalid status makes the record malformed.
 
-## 7. Bytes Transferred
+## 8. Bytes Transferred
 
+- Store bytes as a non-negative 64-bit integer.
 - Numeric values are converted to BIGINT.
-- A value of '-' is converted to 0.
-- A missing bytes field is converted to 0.
-- A non-numeric value other than '-' is malformed.
+- A value of `-` is converted to zero.
+- A missing bytes field is converted to zero.
+- A non-numeric value other than `-` is malformed.
 - Negative values are invalid.
 
-## 8. Malformed Record Handling
+## 9. Malformed Record Handling
 
 A record is malformed if:
 
 1. The outer log structure cannot be parsed.
-2. The host is missing or represented by '-'.
+2. The host is missing or represented by `-`.
 3. The timestamp is missing or invalid.
-4. The request field is structurally invalid.
-5. The request has more than three components.
-6. The status code is missing or invalid.
-7. The bytes field is non-numeric and not '-'.
+4. The request field is structurally invalid, such as an unclosed quote.
+5. The status code is missing or invalid.
+6. The bytes field is non-numeric and is not `-`.
 
 Each malformed input line must be counted exactly once.
 
-Malformed records must not silently disappear.
-Maintain per-batch and per-run malformed counts.
+Malformed records:
 
-## 9. Query Eligibility
+- Retain their original record number and batch assignment.
+- Contribute to the batch malformed count.
+- Contribute to the total run malformed count.
+- Are excluded from Q1, Q2 and Q3.
+- Are eligible for the first-100 malformed sample output.
+
+Missing request components alone do not make a record malformed.
+
+## 10. Query Eligibility and Definitions
 
 ### Q1: Daily Traffic Summary
 
 Include every valid parsed record.
 
-Group by log_date and status_code.
+Group by `log_date` and `status_code`.
 
 Calculate:
-- Request count
-- Total bytes transferred
+
+- Request count.
+- Total bytes transferred.
 
 ### Q2: Top Requested Resources
 
-Include valid records with a non-NULL resource_path.
+Include valid records with a non-NULL `resource_path`.
 
-Group by resource_path.
+Group by exact `resource_path`.
 
 Calculate:
-- Request count
-- Total bytes transferred
-- Distinct host count
 
-Return the global top 20 resources.
+- Request count.
+- Total bytes transferred.
+- Distinct host count.
 
-For equal request counts, sort resource_path
-in ascending order as a deterministic tie-breaker.
+Return the top 20 resources after aggregation.
+
+Sort by:
+
+1. Request count descending.
+2. Resource path ascending using binary UTF-8 ordering.
+
+For whole-run results, distinct hosts must be deduplicated across the complete dataset. Do not add per-batch distinct-host counts.
 
 ### Q3: Hourly Error Analysis
 
 Include every valid parsed record.
 
-Group by log_date and log_hour.
+Group by `log_date` and `log_hour`.
 
 Calculate:
-- Error request count (status 400-599)
-- Total request count
-- Error rate
-- Distinct hosts generating error requests
 
-Error rate:
+- Total request count.
+- Error request count, where status is between 400 and 599 inclusive.
+- Distinct hosts among error requests.
+- Error rate: error request count divided by total request count.
 
-error request count / total request count
+Include hours with valid requests and zero errors. Do not synthesize hours with no requests.
 
-Represent error rate as a fraction between 0 and 1.
+## 11. Numeric and Aggregation Requirements
 
-## 10. Batching Consistency
+- Request counts and byte totals must use 64-bit integer-compatible representations.
+- Error rate must be represented as a decimal fraction between 0 and 1.
+- Cross-pipeline error-rate comparisons use an absolute tolerance of `1e-9`.
+- Global distinct-host counts must be calculated from the complete set of relevant records, not by summing batch-level distinct counts.
 
-- Batch size means original input records.
-- Batch IDs begin at 1.
-- Every non-empty batch is counted.
-- The final partial batch is valid.
-- Malformed records are counted in their respective batches.
-- Global aggregations must combine information
-  across all batches correctly.
-- Distinct-host counts must not be added directly
-  across batches.
+## 12. Cross-Pipeline Equivalence
 
-## 11. Cross-Pipeline Equivalence
+Pig, Hadoop MapReduce, MongoDB and Hive must implement the same:
 
-Pig, MapReduce, MongoDB and Hive must implement
-the same rules.
+- Outer record parsing.
+- Timestamp validation and extraction.
+- Request decomposition.
+- Missing-value handling.
+- Malformed-record criteria.
+- Query eligibility.
+- Grouping keys.
+- Aggregation semantics.
+- Sorting and tie-breaking.
+- Output schemas.
 
-No pipeline may independently change:
-
-- Parsing behaviour
-- Missing-value handling
-- Malformed-record criteria
-- Query eligibility
-- Grouping keys
-- Aggregation semantics
-- Output schemas
-
-The same test cases must be used to validate
-all four implementations.
+The same parsing test cases must be used to validate all four implementations before processing the complete dataset.
