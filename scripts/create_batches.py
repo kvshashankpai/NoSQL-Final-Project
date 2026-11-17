@@ -88,8 +88,13 @@ def create_batches(input_files, batch_size, run_id, output_root):
                         )
                         current_writer = batch_path.open("wb")
 
-                    # Write the original bytes unchanged.
+                    # Write the original bytes unchanged. A final line
+                    # without LF still gets a terminator in the batch
+                    # file, so it is never joined to the next file's
+                    # first line. Only the separator is added.
                     current_writer.write(raw_line)
+                    if not raw_line.endswith(b"\n"):
+                        current_writer.write(b"\n")
 
                     current_batch_count += 1
                     total_records += 1

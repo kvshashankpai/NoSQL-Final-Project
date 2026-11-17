@@ -59,6 +59,9 @@ Before benchmarking, record:
 A checksum change means the input data may have changed; such runs must
 not be treated as directly comparable without explanation.
 
+This verification step runs once per benchmark session, outside any
+timed run. Its results are copied into `runs.input_files` for every run.
+
 ## 4. Batch-Size Experiments
 
 Use the following batch sizes:
@@ -112,11 +115,12 @@ consistent across trials.
 
 ## 6. Runtime Measurement Boundary
 
-The controller starts the timer immediately before the selected adapter
-begins reading the input.
+The controller cannot see when an adapter begins reading, so it starts
+the timer just before it launches the adapter.
 
 The measured duration includes:
 
+-   Backend startup (JVM, Hadoop, database connections).
 -   Input reading.
 -   Record numbering and batch assignment.
 -   Parsing and transformation.
@@ -127,13 +131,14 @@ The measured duration includes:
 
 The timer stops after the final result transaction commits successfully.
 
-The elapsed duration is then persisted in run metadata. A run is marked
-complete only after elapsed time has been saved.
+The elapsed duration is then saved and the run is marked `COMPLETED` in
+one statement. Failed runs are kept with status `FAILED`.
 
 Exclude:
 
 -   Dataset downloads.
 -   Software installation.
+-   Input checksum verification.
 -   Report rendering.
 -   Time spent waiting for user interaction before the run starts.
 

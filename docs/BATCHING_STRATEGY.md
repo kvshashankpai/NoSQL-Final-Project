@@ -40,12 +40,15 @@ The two input files are read sequentially, July first and August second. Record 
 
 Line handling:
 
-- LF terminates a record.
+- LF terminates a record. A lone CR is ordinary content, not a terminator.
 - For CRLF, remove the CR immediately preceding LF.
 - Count a final unterminated line as a record.
 - A trailing LF does not create an additional empty record.
 - A blank physical line is still an input record and is treated as malformed by the parser.
 - Do not otherwise modify the original record before backend parsing.
+- If a file's last line has no LF, it is still a separate record. It must never be joined to the first line of the next file.
+
+Hadoop's default line reader and Python's universal-newline mode do not follow these rules by default; see `PARSING_RULES.md` section 11.
 
 ## 4. Batch Assignment
 
@@ -162,7 +165,8 @@ The adapter must retain the first 100 malformed samples per run in `malformed_sa
 
 - Source file.
 - Source record number.
-- Malformation reason.
+- Batch ID.
+- Malformation reason code (`PARSING_RULES.md` section 9).
 - Original raw line.
 
 The total malformed count must still include every malformed record, not only the retained samples.
@@ -171,10 +175,11 @@ The total malformed count must still include every malformed record, not only th
 
 Runtime measurement is coordinated by the Python controller.
 
-It begins immediately before the selected adapter starts reading its input, including adapter-side input reading and batch assignment.
+The controller cannot see when an adapter begins reading, so it starts the timer just before it launches the adapter. Backend startup (JVM, Hadoop, database connections) is therefore included, in the same way for every pipeline.
 
 It includes:
 
+- Backend startup.
 - Reading the original input files.
 - Batch assignment.
 - Parsing and transformation.
@@ -184,7 +189,7 @@ It includes:
 - Loading results into PostgreSQL.
 - Committing the run and its results.
 
-The timer stops after the final result transaction commits successfully. The elapsed time is then persisted in run metadata.
+The timer stops after the final result transaction commits successfully. The elapsed time is then saved and the run is marked `COMPLETED` (see `DATABASE_DESIGN.md` section 12).
 
 Dataset downloads, software installation and report rendering are excluded.
 

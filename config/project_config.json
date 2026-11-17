@@ -28,19 +28,23 @@
     "adapters": [
       {
         "name": "Pig",
-        "directory": "pipelines/pig"
+        "directory": "pipelines/pig",
+        "launcher": null
       },
       {
         "name": "MapReduce",
-        "directory": "pipelines/mapreduce"
+        "directory": "pipelines/mapreduce",
+        "launcher": null
       },
       {
         "name": "MongoDB",
-        "directory": "pipelines/mongodb"
+        "directory": "pipelines/mongodb",
+        "launcher": null
       },
       {
         "name": "Hive",
-        "directory": "pipelines/hive"
+        "directory": "pipelines/hive",
+        "launcher": null
       }
     ],
     "adapter_cli": {
@@ -53,7 +57,8 @@
   "database": {
     "type": "PostgreSQL",
     "database_name": "nosql_final_project",
-    "purpose": "Common reporting and execution metadata storage"
+    "purpose": "Common reporting and execution metadata storage",
+    "minimum_version": 15
   },
   "frontend": {
     "framework": "Streamlit"
@@ -80,11 +85,62 @@
       "malformed_samples.jsonl"
     ],
     "whole_run_batch_id": null,
-    "malformed_sample_limit": 100
+    "malformed_sample_limit": 100,
+    "optional_files": [
+      "phase_timings.jsonl"
+    ],
+    "malformed_reason_codes": [
+      "BLANK_LINE",
+      "BAD_STRUCTURE",
+      "BAD_HOST",
+      "BAD_TIMESTAMP",
+      "BAD_STATUS",
+      "BAD_BYTES"
+    ]
   },
   "queries": [
-    "Q1_Daily_Traffic_Summary",
-    "Q2_Top_Requested_Resources",
-    "Q3_Hourly_Error_Analysis"
+    {
+      "id": "Q1_Daily_Traffic_Summary",
+      "output_file": "daily_traffic.jsonl",
+      "table": "q1_daily_traffic",
+      "columns": [
+        "log_date",
+        "status_code",
+        "request_count",
+        "total_bytes"
+      ]
+    },
+    {
+      "id": "Q2_Top_Requested_Resources",
+      "output_file": "top_resources.jsonl",
+      "table": "q2_top_resources",
+      "top_n": 20,
+      "extra_columns": [
+        "rank"
+      ],
+      "columns": [
+        "resource_path",
+        "request_count",
+        "total_bytes",
+        "distinct_host_count"
+      ]
+    },
+    {
+      "id": "Q3_Hourly_Error_Analysis",
+      "output_file": "hourly_errors.jsonl",
+      "table": "q3_hourly_errors",
+      "error_status_range": [
+        400,
+        599
+      ],
+      "columns": [
+        "log_date",
+        "log_hour",
+        "error_request_count",
+        "total_request_count",
+        "error_rate",
+        "distinct_error_hosts"
+      ]
+    }
   ]
 }

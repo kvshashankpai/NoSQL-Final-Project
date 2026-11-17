@@ -54,14 +54,14 @@ The user selects exactly one pipeline for each run.
 
 1. Streamlit collects the selected pipeline and batch size.
 2. The Python controller validates the configuration and creates a UUID run ID.
-3. The controller starts runtime measurement immediately before the selected adapter begins reading input.
+3. The controller records the UTC start time and starts the runtime timer, then inserts the run row with status `RUNNING`. The controller cannot see when an adapter starts reading, so the timer starts before the adapter is launched and backend startup (JVM, Hadoop, database connections) is included for every pipeline.
 4. The controller invokes exactly one backend adapter, passing the original input paths in order, the batch size, and a fresh output directory.
 5. The selected adapter reads the source files, numbers records continuously, assigns batches, parses records, and executes Q1, Q2, and Q3 within its own backend technology.
 6. The adapter writes the agreed JSONL output files.
 7. The controller validates the adapter exit status and output files.
-8. The controller loads run metadata, batch metadata, malformed samples, and all query results into PostgreSQL in a transaction.
-9. After the result transaction commits, the controller stops the timer and persists elapsed seconds.
-10. The run is marked complete only after elapsed time has been saved.
+8. The controller loads batch metadata, malformed samples, and all query results into PostgreSQL in one transaction.
+9. After the result transaction commits, the controller stops the timer.
+10. The controller saves elapsed seconds and marks the run `COMPLETED` in one statement. On any failure, it rolls back the results and marks the run `FAILED`.
 
 The Python controller coordinates the work; it does not replace the ETL or analytics implementation of any backend.
 
@@ -177,6 +177,7 @@ Each adapter writes the following UTF-8 JSON Lines files into its run-specific o
 | `top_resources.jsonl` | Q2 per-batch and whole-run rows |
 | `hourly_errors.jsonl` | Q3 per-batch and whole-run rows |
 | `malformed_samples.jsonl` | First 100 malformed samples in input order |
+| `phase_timings.jsonl` | Optional diagnostic phase durations |
 
 Output requirements:
 
@@ -187,8 +188,10 @@ Output requirements:
 - Per-batch analytics use a positive `batch_id`.
 - Whole-run analytics use `"batch_id": null`.
 - Empty results are represented by empty files.
+- Column names and order follow the brief exactly; see `docs/COMMON_DATA_MODEL.md`.
+- Top-resource rows include `rank` (1-20 within each scope).
 - `batches.jsonl` contains `batch_id`, `record_count`, and `malformed_count`.
-- Each malformed sample contains source file, source record number, reason, and raw line.
+- Each malformed sample contains source file, source record number, batch ID, reason code, and raw line. Reason codes are fixed (see `docs/PARSING_RULES.md` section 9).
 - The 100-sample limit does not limit malformed counting.
 
 ## 9. PostgreSQL Reporting Database
@@ -207,16 +210,16 @@ The planned common tables are:
 | `q2_top_resources` | Q2 results |
 | `q3_hourly_errors` | Q3 results |
 
-A NULL `batch_id` denotes a whole-run result; a positive value denotes a per-batch result. Do not use zero as a sentinel. Use partial unique indexes to enforce uniqueness separately for batch-level and whole-run rows.
+Every result table stores `run_id`, `pipeline_name`, `batch_id` and `executed_at`, as the brief requires. A NULL `batch_id` denotes a whole-run result; a positive value denotes a per-batch result. Do not use zero as a sentinel. Uniqueness uses `UNIQUE NULLS NOT DISTINCT` (PostgreSQL 15+), so duplicate whole-run rows are rejected.
 
-The controller loads all result rows for a run transactionally. On adapter or load failure, it must not publish partial query results. The authoritative runtime is stored in `runs.elapsed_seconds`.
+The controller inserts each run as `RUNNING` first, so failed runs are kept with status `FAILED`. All result rows for a run are loaded in one transaction; on adapter or load failure, no partial query results are published. The authoritative runtime is stored in `runs.elapsed_seconds`.
 
 See `docs/DATABASE_DESIGN.md` for the detailed schema and loading contract.
 
 ## 10. Repository Structure
 
 ```text
-Final_Project/
+NoSQL-Final-Project/
 ├── README.md
 ├── .gitignore
 ├── config/
@@ -267,7 +270,7 @@ All four pipelines must be checked against the same parsing and batching test ca
 
 For benchmark comparisons, use the same input dataset, batch size, query definitions, and equivalent environment conditions. Record software versions and input checksums. Run at least three trials and report the median runtime.
 
-Runtime begins immediately before adapter input reading and stops after the PostgreSQL result transaction commits. Persisting elapsed time follows the result commit. Dataset downloads, software installation, and report rendering are excluded.
+Runtime begins when the controller starts the timer, just before it launches the adapter, and stops after the PostgreSQL result transaction commits. Persisting elapsed time follows the result commit. Dataset downloads, software installation, input checksum verification, and report rendering are excluded.
 
 Do not state that a pipeline has been validated or benchmarked until its tests and runs have actually been completed.
 
@@ -300,4 +303,4 @@ Refer to the `docs/` directory for the authoritative project contracts:
 - `PARSING_TEST_CASES.md` — expected parsing and batching test outcomes.
 - `DATABASE_DESIGN.md` — PostgreSQL tables, relationships, and transactional loading.
 - `EXPERIMENT_DESIGN.md` — benchmark methodology and reproducibility.
-- `IMPLEMENTATION_ROADMAP.md` — implementation phases and validation gates.
+- `IMPLEMENTATION_ROADMAP.md` — implementation stages, validation gates, and open design decisions.

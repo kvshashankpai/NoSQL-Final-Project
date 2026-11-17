@@ -38,3 +38,6 @@ target/
 # Temporary files
 *.tmp
 *.log
+
+# Keep test fixture inputs, even when named *.log
+!tests/**/*.log

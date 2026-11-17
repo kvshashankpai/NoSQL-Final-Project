@@ -42,7 +42,8 @@ The user selects exactly one pipeline per run.
 - Validate configuration
 - Generate a UUID run ID
 - Record UTC start timestamp
-- Start runtime measurement immediately before adapter input reading
+- Start runtime measurement just before launching the adapter
+- Insert the run row with status `RUNNING`
 - Invoke exactly one selected adapter
 - Pass ordered original input paths, batch size and fresh output directory
 - Check adapter exit status
@@ -50,7 +51,7 @@ The user selects exactly one pipeline per run.
 - Load all results into PostgreSQL transactionally
 - Stop timing after successful result commit
 - Persist elapsed runtime
-- Mark the run complete only after elapsed time is saved
+- Mark the run `COMPLETED` only after elapsed time is saved, or `FAILED` on any failure
 
 The controller must not perform production batching, parsing, transformation or analytical aggregation.
 
@@ -136,18 +137,18 @@ The exact executable differs by backend, but the argument contract remains commo
 
 1. User selects a pipeline and batch size.
 2. Controller validates the configuration.
-3. Controller generates a UUID run ID and records UTC start time.
+3. Controller generates a UUID run ID.
 4. Controller creates a fresh run-specific output directory.
-5. Runtime measurement starts immediately before adapter input reading.
+5. Controller records the UTC start time, starts runtime measurement, and inserts the run row as `RUNNING`.
 6. Controller invokes exactly one adapter.
 7. Adapter reads inputs, assigns record numbers and batches, parses records and executes the queries.
 8. Adapter writes JSONL outputs.
 9. Controller checks exit status and validates outputs.
-10. Controller loads run metadata, batch records, malformed samples and query results in one PostgreSQL transaction.
+10. Controller loads batch records, malformed samples, phase timings and query results, and updates run-level counts, in one PostgreSQL transaction.
 11. Transaction commits successfully.
 12. Runtime measurement stops.
-13. Elapsed time is persisted in run metadata.
-14. Run is marked complete only after elapsed time is saved.
+13. Elapsed time is saved and the run is marked `COMPLETED` in one statement.
+14. On any failure in steps 6-13, the result transaction is rolled back and the run is marked `FAILED` with an error message.
 15. Streamlit displays the completed run.
 
 ## 7. Failure Handling
@@ -161,12 +162,13 @@ A run must not be marked complete if:
 - Result transaction does not commit
 - Elapsed runtime cannot be persisted
 
-Failed runs must not appear as completed benchmark results.
+Failed runs are kept with status `FAILED` and an error message, so failures can be reported. They must not appear as completed benchmark results.
 
 ## 8. Runtime Measurement
 
 Runtime includes:
 
+- Backend startup (the timer starts just before the adapter is launched)
 - Input reading
 - Record numbering and batch assignment
 - Parsing and transformation
@@ -177,7 +179,7 @@ Runtime includes:
 
 Runtime stops after the result transaction commits successfully. Elapsed time is then persisted.
 
-Dataset downloads, software installation, report rendering and pre-run user interaction are excluded.
+Dataset downloads, software installation, input checksum verification, report rendering and pre-run user interaction are excluded.
 
 ## 9. Production Batching
 
@@ -219,7 +221,9 @@ Each adapter produces UTF-8 JSONL files:
 - `hourly_errors.jsonl`
 - `malformed_samples.jsonl`
 
-Analytics files contain per-batch and whole-run rows. Per-batch rows have a positive batch ID; whole-run rows have a NULL batch ID.
+An adapter may also write an optional `phase_timings.jsonl`.
+
+Analytics files contain per-batch and whole-run rows. Per-batch rows have a positive batch ID; whole-run rows have a NULL batch ID. Column names and order follow the brief exactly.
 
 Schemas are defined in `COMMON_DATA_MODEL.md`.
 
@@ -246,3 +250,4 @@ Use the same dataset, batch size and query semantics for runtime comparisons.
 - `BATCHING_STRATEGY.md`
 - `PARSING_RULES.md`
 - `PARSING_TEST_CASES.md`
+- `DATABASE_DESIGN.md`

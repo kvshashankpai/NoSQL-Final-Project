@@ -16,6 +16,13 @@ Streamlit provides the user interface.
 This document is a plan. A task must only be marked complete after its
 implementation and validation have actually been performed.
 
+The stages below are internal work stages. They are not the course's
+two review phases. The course's **Phase 1 review** needs the
+architecture plus a working prototype with one or two pipelines, which
+means reaching Stage 5 for at least one or two backends (with enough of
+Stages 3, 4 and 6 to run them end to end). The **Phase 2 review** needs
+all stages complete.
+
 ## 2. Implementation Principles
 
 1.  Freeze the common input, parsing, batching, query, and output
@@ -32,7 +39,7 @@ implementation and validation have actually been performed.
 7.  Record implementation decisions and test evidence as the project
     progresses.
 
-## 3. Phase 1 - Repository and Configuration
+## 3. Stage 1 - Repository and Configuration
 
 ### Tasks
 
@@ -51,7 +58,7 @@ implementation and validation have actually been performed.
 The repository structure and configuration agree with the architecture,
 batching, parsing, and database documents.
 
-## 4. Phase 2 - Common Contracts and Test Fixtures
+## 4. Stage 2 - Common Contracts and Test Fixtures
 
 ### Tasks
 
@@ -72,7 +79,7 @@ Expected outcomes are explicit and reproducible. Do not claim
 cross-backend validation until each adapter has actually passed the
 fixtures.
 
-## 5. Phase 3 - PostgreSQL Schema and Persistence
+## 5. Stage 3 - PostgreSQL Schema and Persistence
 
 ### Tasks
 
@@ -84,8 +91,10 @@ fixtures.
 -   [ ] Create the `malformed_samples` table.
 -   [ ] Create the Q1, Q2, and Q3 result tables.
 -   [ ] Add primary keys, foreign keys, checks, and indexes.
--   [ ] Add separate partial unique indexes for per-batch and whole-run
-    rows.
+-   [ ] Add `UNIQUE NULLS NOT DISTINCT` constraints so per-batch and
+    whole-run rows are both protected from duplicates.
+-   [ ] Add `pipeline_name` and `executed_at` to every result table, and
+    `rank` to Q2.
 -   [ ] Implement transactional result loading.
 -   [ ] Implement rollback and failure-status handling.
 -   [ ] Implement elapsed-time persistence after result commit.
@@ -96,7 +105,7 @@ fixtures.
 A controlled test run can be loaded atomically. A forced load failure
 leaves no partially published query results.
 
-## 6. Phase 4 - Backend Adapter Interface
+## 6. Stage 4 - Backend Adapter Interface
 
 ### Tasks
 
@@ -115,11 +124,14 @@ leaves no partially published query results.
 The controller can invoke a test adapter using the shared argument
 contract and correctly detect success and failure.
 
-## 7. Phase 5 - Implement the Four Pipelines
+## 7. Stage 5 - Implement the Four Pipelines
 
 Implement each backend independently. The selected backend must perform
 its own input reading, record numbering, batch assignment, parsing,
 transformations, and query aggregations.
+
+Resolve open decisions D1 and D2 (section 15) before starting this
+stage, and read the backend warnings in `PARSING_RULES.md` section 11.
 
 ### 7.1 Apache Pig
 
@@ -164,7 +176,7 @@ Each adapter independently passes the shared parsing, batching, and
 query fixtures. Do not substitute Python-side ETL for backend
 processing.
 
-## 8. Phase 6 - Python Controller
+## 8. Stage 6 - Python Controller
 
 ### Tasks
 
@@ -172,7 +184,8 @@ processing.
 -   [ ] Generate UUID run IDs.
 -   [ ] Record UTC start timestamps.
 -   [ ] Create fresh run-specific output directories.
--   [ ] Start timing immediately before adapter input reading.
+-   [ ] Start timing just before launching the adapter, and insert the
+    run row as `RUNNING`.
 -   [ ] Invoke exactly one selected adapter.
 -   [ ] Validate adapter exit status and output files.
 -   [ ] Load run metadata, batches, samples, and query rows
@@ -180,7 +193,9 @@ processing.
 -   [ ] Stop timing after result transaction commit.
 -   [ ] Persist elapsed seconds.
 -   [ ] Mark the run complete only after elapsed time is saved.
--   [ ] Mark failures without publishing partial query results.
+-   [ ] Mark failures as `FAILED` with an error message, without
+    publishing partial query results.
+-   [ ] Mark runs left `RUNNING` by a crash as `FAILED` on startup.
 
 ### Completion gate
 
@@ -188,7 +203,7 @@ End-to-end controller tests demonstrate correct success, adapter
 failure, output validation failure, database rollback, and elapsed-time
 persistence behaviour.
 
-## 9. Phase 7 - Streamlit Frontend and Reporting
+## 9. Stage 7 - Streamlit Frontend and Reporting
 
 ### Tasks
 
@@ -211,7 +226,7 @@ persistence behaviour.
 The user can launch a selected pipeline and inspect its committed
 results and run metadata through Streamlit.
 
-## 10. Phase 8 - Full-Dataset Correctness Validation
+## 10. Stage 8 - Full-Dataset Correctness Validation
 
 ### Tasks
 
@@ -233,7 +248,7 @@ All four backends produce equivalent results under the common contract,
 or any unresolved differences are explicitly documented and excluded
 from performance claims.
 
-## 11. Phase 9 - Benchmark Experiments
+## 11. Stage 9 - Benchmark Experiments
 
 Use the batch sizes specified in `EXPERIMENT_DESIGN.md`:
 
@@ -259,7 +274,7 @@ Use the batch sizes specified in `EXPERIMENT_DESIGN.md`:
 The benchmark report is reproducible and includes correctness status,
 trial counts, median runtimes, and experimental limitations.
 
-## 12. Phase 10 - Final Report and Submission
+## 12. Stage 10 - Final Report and Submission
 
 ### Tasks
 
@@ -312,3 +327,55 @@ adapter interface.
 -   Distinguish planned, implemented, tested, and benchmarked work.
 -   Do not describe placeholder directories as completed components.
 -   Update this roadmap when scope or agreed design decisions change.
+
+## 15. Open Design Decisions
+
+These must be agreed by the team and recorded here before the four
+adapters are built in parallel.
+
+### D1 - How each backend assigns continuous record numbers
+
+Hadoop-based engines read input splits in parallel, so no single task
+knows a line's global record number. The options are:
+
+-   **Engine-native numbering.** Examples: Hive
+    `ROW_NUMBER() OVER (ORDER BY <file order>, BLOCK__OFFSET__INSIDE__FILE)`;
+    Pig `RANK` with no sort key; a MapReduce pre-pass that counts lines per
+    split and adds up the counts. This keeps everything in the engine but
+    adds jobs, and a total sort may force a single reducer.
+-   **Adapter staging step.** A small, identical step in each adapter
+    reads the original files and writes each *unchanged* line with its
+    record number and batch ID (allowed by the original run contract).
+    This is simpler and identical for all engines, but it must not parse,
+    clean or filter, and it must be inside the measured runtime.
+
+Whichever is chosen, it must handle LF-only terminators and ISO-8859-1
+decoding (`PARSING_RULES.md` section 11).
+
+### D2 - What "processing in batches" means for each backend
+
+If every backend only tags records with `batch_id` and groups by it in
+one job, runtime barely changes with batch size, and the B1/B2/B3
+experiment shows little. A grader may also argue that the input is not
+really processed in batches. Agree one equivalent meaning for all four,
+for example:
+
+-   **MongoDB:** insert and aggregate one batch at a time.
+-   **Hive:** one partition per batch.
+-   **Pig and MapReduce:** one input directory or job per batch.
+
+Then compute the whole-run results from the combined staged data.
+
+### D3 - NULL batch ID for whole-run rows
+
+The brief asks for a batch identifier on stored results. Whole-run rows
+use `batch_id = NULL` (shown as "Whole run"). Keep this, but explain it
+in the report and at the Phase 1 review, or confirm it with the
+instructor.
+
+### D4 - Adapter launch commands
+
+`config/project_config.json` has a `launcher` field for each adapter,
+currently `null`. Fill in the exact command for each backend (for
+example a shell script inside its pipeline directory). The controller
+must refuse to run an adapter whose launcher is not set.

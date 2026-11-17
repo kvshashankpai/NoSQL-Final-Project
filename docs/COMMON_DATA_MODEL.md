@@ -92,6 +92,8 @@ Output file: `daily_traffic.jsonl`
 
 Group valid parsed records by date and status code.
 
+The brief's mandated columns are `log_date, status_code, request_count, total_bytes`, in that order.
+
 | Field | Logical type | Description |
 |---|---|---|
 | batch_id | INTEGER / NULL | Positive ID for batch result; NULL for whole-run result |
@@ -113,10 +115,13 @@ Group by the exact resource path.
 | Field | Logical type | Description |
 |---|---|---|
 | batch_id | INTEGER / NULL | Positive ID for batch result; NULL for whole-run result |
+| rank | INTEGER | Position 1-20 within its scope, after sorting |
 | resource_path | STRING | Exact requested resource |
 | request_count | BIGINT | Number of requests |
 | total_bytes | BIGINT | Sum of bytes transferred |
-| distinct_hosts | BIGINT | Number of unique requesting hosts |
+| distinct_host_count | BIGINT | Number of unique requesting hosts |
+
+The brief's mandated columns are `resource_path, request_count, total_bytes, distinct_host_count`, in that order. `batch_id` identifies the scope and `rank` makes the required display order explicit.
 
 Sort by:
 
@@ -138,10 +143,12 @@ Group valid parsed records by date and hour.
 | batch_id | INTEGER / NULL | Positive ID for batch result; NULL for whole-run result |
 | log_date | DATE | Request date |
 | log_hour | INTEGER | Logged hour, 0-23 |
-| total_requests | BIGINT | All valid requests in the hour |
-| error_requests | BIGINT | Requests with status 400-599 inclusive |
+| error_request_count | BIGINT | Requests with status 400-599 inclusive |
+| total_request_count | BIGINT | All valid requests in the hour |
+| error_rate | DECIMAL | `error_request_count / total_request_count` |
 | distinct_error_hosts | BIGINT | Unique hosts among error requests |
-| error_rate | DECIMAL | Error requests divided by total requests |
+
+The brief's mandated columns are `log_date, log_hour, error_request_count, total_request_count, error_rate, distinct_error_hosts`, in that order.
 
 Include hours with valid requests even when the error count is zero. Do not synthesize rows for hours with no requests.
 
@@ -157,8 +164,13 @@ Retain the first 100 malformed records in input order for each run.
 |---|---|---|
 | source_file | STRING | Original input filename |
 | record_number | BIGINT | Continuous input record number |
-| reason | STRING | Malformation reason |
+| batch_id | INTEGER | Batch the record was assigned to |
+| reason | STRING | One malformation reason code from `PARSING_RULES.md` section 9 |
 | raw_line | STRING | Original record content after line-terminator removal |
+
+`reason` must be one of the fixed codes (`BLANK_LINE`, `BAD_STRUCTURE`, `BAD_HOST`, `BAD_TIMESTAMP`, `BAD_STATUS`, `BAD_BYTES`), chosen by the precedence order in `PARSING_RULES.md`, so samples are comparable across pipelines.
+
+`raw_line` is written as a JSON string. A U+0000 character (input byte `0x00`) is written as the JSON escape `\u0000`; see `DATABASE_DESIGN.md` for how it is stored.
 
 The sample limit applies only to stored examples. All malformed records must contribute to malformed counts.
 
@@ -172,6 +184,8 @@ Every adapter produces the following files in its run-specific output directory:
 - `hourly_errors.jsonl`
 - `malformed_samples.jsonl`
 
+An adapter may also write an optional `phase_timings.jsonl`, one object per phase with `phase_name` (string) and `duration_seconds` (number). It is diagnostic only and feeds the `phase_timings` table.
+
 Output encoding is UTF-8.
 
 Each line is one valid JSON object.
@@ -184,7 +198,8 @@ Requirements:
 - Per-batch analytics contain a positive `batch_id`.
 - Whole-run analytics contain `"batch_id": null`.
 - An empty result is represented by an empty file.
-- Top-resource rows follow the required ranking order.
+- Top-resource rows carry `rank` and follow the required ranking order.
+- Field names are exactly those in sections 5-9; extra fields are rejected by the controller.
 - Row ordering in other result files is not significant.
 
 ## 11. Cross-Pipeline Equivalence
