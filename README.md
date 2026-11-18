@@ -69,6 +69,8 @@ The Python controller coordinates the work; it does not replace the ETL or analy
 
 The Phase 1 executable prototype is Hadoop MapReduce. The menu keeps all four planned pipeline choices visible, while the MapReduce launcher is the implemented production path at this stage. The other launchers remain unset until those adapters are built; choosing one reports that it is unavailable and does not create a database run.
 
+See [`pipelines/mapreduce/README.md`](pipelines/mapreduce/README.md) for the MapReduce-specific architecture, Java job map, setup, execution, outputs, and troubleshooting guide.
+
 From the repository root, start the interactive menu with:
 
 ```bash
