@@ -34,7 +34,7 @@
       {
         "name": "MapReduce",
         "directory": "pipelines/mapreduce",
-        "launcher": null
+        "launcher": ["{python}", "pipelines/mapreduce/adapter.py"]
       },
       {
         "name": "MongoDB",

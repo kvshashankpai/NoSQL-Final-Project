@@ -65,6 +65,51 @@ The user selects exactly one pipeline for each run.
 
 The Python controller coordinates the work; it does not replace the ETL or analytics implementation of any backend.
 
+### Phase 1 prototype (MapReduce)
+
+The Phase 1 executable prototype is Hadoop MapReduce. The menu keeps all four planned pipeline choices visible, while the MapReduce launcher is the implemented production path at this stage. The other launchers remain unset until those adapters are built; choosing one reports that it is unavailable and does not create a database run.
+
+From the repository root, start the interactive menu with:
+
+```bash
+python3 controller/main.py
+```
+
+For repeatable execution, use the CLI:
+
+```bash
+python3 controller/main.py --pipeline mapreduce --batch-size 1000000
+```
+
+The default input order comes from `config/project_config.json` and expects `data/raw/NASA_access_log_Jul95` followed by `data/raw/NASA_access_log_Aug95`. A custom batch size and explicit input list can be supplied without editing source:
+
+```bash
+python3 controller/main.py --pipeline mapreduce --batch-size 100000 --input data/raw/NASA_access_log_Jul95 --input data/raw/NASA_access_log_Aug95
+```
+
+To execute the synthetic parsing fixture through the controller and validate its JSONL outputs without PostgreSQL:
+
+```bash
+python3 controller/main.py --pipeline mapreduce --batch-size 10 --input tests/fixtures/parsing/input/cases.log --no-db --output-dir /tmp/nosql-mapreduce-smoke
+```
+
+Install Python requirements and ensure Hadoop 3.x (`hadoop` command) is on `PATH`. For database persistence, configure `.env` from `.env.example`, start PostgreSQL with `docker compose up -d postgres`, and apply the schema once:
+
+```bash
+python3 -m pip install -r requirements.txt
+cp .env.example .env
+docker compose up -d postgres
+psql -h localhost -U etl -d nosql_final_project -v ON_ERROR_STOP=1 -f database/schema.sql
+```
+
+After placing both NASA source files in `data/raw/`, run the full configured dataset with:
+
+```bash
+python3 controller/main.py --pipeline mapreduce --batch-size 1000000
+```
+
+Omit `--pipeline` to select MapReduce interactively. Each run uses a fresh `results/<run-id>/` directory. `--no-db` is intended for local adapter development; normal runs validate first and then load their results to PostgreSQL.
+
 ### Adapter command-line contract
 
 Each adapter must accept:
@@ -289,7 +334,7 @@ Update this section as implementation progresses:
 - [ ] Controller run lifecycle, transactional loader and recovery
 - [ ] Report and Streamlit frontend with run history and comparison
 - [ ] Apache Pig adapter
-- [ ] Hadoop MapReduce adapter
+- [x] Phase 1 Hadoop MapReduce adapter and controller CLI (fixture validated)
 - [ ] Cross-pipeline parsing and batching validation
 - [ ] Full-dataset correctness validation
 - [ ] Repeated benchmark trials

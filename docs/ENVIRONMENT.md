@@ -96,7 +96,7 @@ The controller runs `launcher + --batch-size N --output-dir DIR --input FILE ...
 | Pipeline | Launcher | Status |
 |---|---|---|
 | Pig | `null` | In progress |
-| MapReduce | `null` | In progress |
+| MapReduce | `{python} pipelines/mapreduce/adapter.py` | Phase 1 prototype |
 
 The team is running only the Pig and MapReduce pipelines. The MongoDB and Hive entries in the config have no launcher.
 
@@ -107,11 +107,12 @@ Every adapter must also support `--debug-parsed` (fixtures) and `--engine-info` 
 compose.yaml provides a PostgreSQL 16 development service.
 Set PGPASSWORD in .env (or the shell) and keep it private. The PostgreSQL
 service creates user etl and database nosql_final_project to match .env.example.
-Its default port is 5432, bound to localhost.
+Its host port is 5433 (container port 5432), bound to localhost, to avoid a
+conflict with a local PostgreSQL installation.
 
 ~~~bash
 docker compose up -d postgres
-psql -h localhost -U etl -v ON_ERROR_STOP=1 -d nosql_final_project -f database/schema.sql
+psql -h localhost -p 5433 -U etl -v ON_ERROR_STOP=1 -d nosql_final_project -f database/schema.sql
 ~~~
 
 The Compose file only starts shared databases. It does not run adapters,
