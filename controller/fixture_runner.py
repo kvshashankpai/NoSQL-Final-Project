@@ -58,7 +58,7 @@ def run_fixtures(pipeline, names=None, log=print):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Run an adapter on the test fixtures and compare outputs.")
-    ap.add_argument("--pipeline", required=True, help="Pig, MapReduce, MongoDB or Hive")
+    ap.add_argument("--pipeline", required=True, help="pipeline name from the config, for example Pig or MapReduce")
     ap.add_argument("--fixture", action="append", default=None, help="fixture name (default: all)")
     args = ap.parse_args(argv)
     return 0 if run_fixtures(args.pipeline, args.fixture) else 1

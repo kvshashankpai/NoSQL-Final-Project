@@ -241,10 +241,8 @@ NoSQL-Final-Project/
 │   └── PARSING_TEST_CASES.md
 ├── frontend/
 ├── pipelines/
-│   ├── hive/
 │   ├── mapreduce/
 │   │   └── src/
-│   ├── mongodb/
 │   └── pig/
 ├── reporting/
 ├── etl_common/               # Shared staging stage and config loading
@@ -287,14 +285,11 @@ Update this section as implementation progresses:
 - [x] Executable test fixtures, output validator and comparator (`tests/`, `controller/validation.py`, `controller/compare.py`)
 - [x] Shared staging stage for record numbering and batches (`etl_common/staging.py`)
 - [x] Fixture runner for any adapter (`python -m controller.fixture_runner --pipeline <name>`)
-- [x] MongoDB adapter; passes all five fixtures on MongoDB 8.0.20
 - [x] PostgreSQL schema (`database/schema.sql`)
 - [ ] Controller run lifecycle, transactional loader and recovery
 - [ ] Report and Streamlit frontend with run history and comparison
-- [ ] MongoDB run on the full NASA dataset
 - [ ] Apache Pig adapter
 - [ ] Hadoop MapReduce adapter
-- [ ] Apache Hive adapter
 - [ ] Cross-pipeline parsing and batching validation
 - [ ] Full-dataset correctness validation
 - [ ] Repeated benchmark trials
