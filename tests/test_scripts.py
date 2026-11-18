@@ -74,3 +74,31 @@ def test_verification_record_and_stat_check(tmp_path):
     a.write_bytes(b"abcd\n")
     os.utime(a, ns=(1, 1))
     assert any("changed since verification" in p for p in check_current(rec, [a, b]))
+
+
+def test_verification_rejects_changed_file_during_hash(tmp_path, monkeypatch):
+    import scripts.verify_inputs as verification
+    source = tmp_path / "source.log"
+    source.write_bytes(b"before")
+    original = verification.sha256_of
+
+    def hash_and_change(path):
+        digest = original(path)
+        Path(path).write_bytes(b"after hashing with different size")
+        return digest
+
+    monkeypatch.setattr(verification, "sha256_of", hash_and_change)
+    with pytest.raises(ValueError, match="changed while hashing"):
+        verification.build_record([source], "ISO-8859-1")
+
+
+def test_verification_checks_paths_not_only_basename(tmp_path):
+    first, second = tmp_path / "a" / "same.log", tmp_path / "b" / "same.log"
+    first.parent.mkdir()
+    second.parent.mkdir()
+    first.write_bytes(b"same")
+    second.write_bytes(b"same")
+    os.utime(first, ns=(1, 1))
+    os.utime(second, ns=(1, 1))
+    record = build_record([first], "ISO-8859-1")
+    assert any("path mismatch" in error for error in check_current(record, [second]))

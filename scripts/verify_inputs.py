@@ -22,6 +22,7 @@ import platform
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -51,7 +52,12 @@ def describe(path):
 def build_record(input_files, encoding):
     files = []
     for order, path in enumerate(input_files, 1):
-        entry = {"order": order, **describe(path), "sha256": sha256_of(path)}
+        before = describe(path)
+        checksum = sha256_of(path)
+        after = describe(path)
+        if before != after:
+            raise ValueError(f"Input changed while hashing: {path}; repeat verification")
+        entry = {"order": order, **after, "sha256": checksum}
         files.append(entry)
     return {"schema_version": 1,
             "verified_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -63,11 +69,19 @@ def build_record(input_files, encoding):
 def write_record(record, out_dir=VERIFICATION_DIR):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = record["verified_at_utc"].replace(":", "").replace("-", "").split(".")[0]
-    path = out_dir / f"{stamp}.json"
+    stamp = datetime.fromisoformat(record["verified_at_utc"]).strftime("%Y%m%dT%H%M%SZ")
+    path = out_dir / f"{stamp}-{uuid4().hex[:12]}.json"
     text = json.dumps(record, indent=2) + "\n"
-    path.write_text(text, encoding="utf-8")
-    (out_dir / "latest.json").write_text(text, encoding="utf-8")
+    for target in (path, out_dir / "latest.json"):
+        temporary = out_dir / f".v-{uuid4().hex[:16]}.tmp"
+        try:
+            with temporary.open("x", encoding="utf-8", newline="\n") as stream:
+                stream.write(text)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
     return path
 
 
@@ -77,6 +91,9 @@ def check_current(record, input_files):
     if len(record["files"]) != len(input_files):
         return [f"verification lists {len(record['files'])} files, run has {len(input_files)}"]
     for entry, path in zip(record["files"], input_files):
+        if repo_path(entry["path"]).resolve() != Path(path).resolve():
+            problems.append(f"path mismatch: verified {entry['path']}, run has {path}")
+            continue
         if entry["name"] != Path(path).name:
             problems.append(f"order/name mismatch: verified {entry['name']}, run has {Path(path).name}")
             continue

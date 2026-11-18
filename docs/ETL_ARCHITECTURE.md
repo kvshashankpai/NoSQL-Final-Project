@@ -51,7 +51,8 @@ The user selects exactly one pipeline per run.
 - Load all results into PostgreSQL transactionally
 - Stop timing after successful result commit
 - Persist elapsed runtime
-- Mark the run `COMPLETED` only after elapsed time is saved, or `FAILED` on any failure
+- Mark the run `COMPLETED` only after elapsed time is saved; handle failed or
+  publication-pending attempts using `DATABASE_DESIGN.md` section 12
 
 The controller must not perform production batching, parsing, transformation or analytical aggregation.
 

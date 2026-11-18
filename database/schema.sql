@@ -54,6 +54,10 @@ CREATE TABLE IF NOT EXISTS public.run_batches (
     PRIMARY KEY (run_id, batch_id)
 );
 
+-- Planned recovery marker: written in the same transaction as all result rows.
+-- The exact measured duration is persisted after the commit acknowledgement.
+ALTER TABLE public.runs ADD COLUMN IF NOT EXISTS results_committed_at TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS public.phase_timings (
     timing_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     run_id UUID NOT NULL REFERENCES public.runs(run_id) ON DELETE CASCADE,
@@ -68,7 +72,7 @@ CREATE TABLE IF NOT EXISTS public.malformed_samples (
     batch_id INTEGER NOT NULL,
     source_file TEXT NOT NULL CHECK (source_file <> ''),
     reason VARCHAR(20) NOT NULL
-        CHECK (reason IN ('BLANK_LINE', 'BAD_STRUCTURE', 'BAD_HOST',
+        CHECK (reason IN ('BLANK_LINE', 'NUL_BYTE', 'BAD_STRUCTURE', 'BAD_HOST',
                           'BAD_TIMESTAMP', 'BAD_STATUS', 'BAD_BYTES')),
     -- Loader escapes U+0000 as the six literal characters \u0000 before insertion.
     raw_line TEXT NOT NULL,
@@ -76,6 +80,15 @@ CREATE TABLE IF NOT EXISTS public.malformed_samples (
     FOREIGN KEY (run_id, batch_id)
         REFERENCES public.run_batches(run_id, batch_id) ON DELETE CASCADE
 );
+
+-- Update installations created before NUL_BYTE was added to the shared contract.
+ALTER TABLE public.malformed_samples
+    DROP CONSTRAINT IF EXISTS malformed_samples_reason_check;
+ALTER TABLE public.malformed_samples
+    ADD CONSTRAINT malformed_samples_reason_check CHECK (
+        reason IN ('BLANK_LINE', 'NUL_BYTE', 'BAD_STRUCTURE', 'BAD_HOST',
+                   'BAD_TIMESTAMP', 'BAD_STATUS', 'BAD_BYTES')
+    );
 
 CREATE TABLE IF NOT EXISTS public.q1_daily_traffic (
     run_id UUID NOT NULL REFERENCES public.runs(run_id) ON DELETE CASCADE,

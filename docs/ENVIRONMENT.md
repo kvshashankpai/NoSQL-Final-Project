@@ -21,7 +21,7 @@ Use the same machine and the same engine execution mode for every benchmark run 
 | Java for Hadoop/Hive/Pig | OpenJDK 8 | Hive 3.1 supports Java 8 only |
 | Hadoop | 3.3.6 | Single-node pseudo-distributed (HDFS + YARN) |
 | Hive | 3.1.3 | Built for Hadoop 3 |
-| Pig | 0.17.0 | Officially built for Hadoop 2. Confirm it runs on Hadoop 3.3.6 with the fixtures before committing to it; otherwise use Hadoop 2.10.2 for all three Hadoop-based engines |
+| Pig | 0.18.0 | Apache documents Hadoop 3 support for this release; validate the chosen runtime with fixtures during implementation |
 
 The Pig, Hive and Hadoop versions are the targets for the adapters that are not written yet. Record the versions actually used in `runs.engine_info` (each adapter reports them with `--engine-info`).
 
@@ -116,3 +116,30 @@ The controller runs `launcher + --batch-size N --output-dir DIR --input FILE ...
 | MapReduce | `null` | Not implemented |
 
 Every adapter must also support `--debug-parsed` (fixtures) and `--engine-info` (prints a JSON object with engine name, version and mode).
+
+## 7. Optional database service configuration
+
+compose.yaml provides PostgreSQL 16 and MongoDB 8.0 development services.
+Set PGPASSWORD in .env (or the shell) and keep it private. The PostgreSQL
+service creates user etl and database nosql_final_project to match .env.example.
+Its default ports are 5432 and 27017, bound to localhost.
+
+~~~bash
+docker compose up -d postgres mongodb
+psql -h localhost -U etl -v ON_ERROR_STOP=1 -d nosql_final_project -f database/schema.sql
+~~~
+
+The Compose file only starts shared databases. It does not run adapters,
+the application controller, or benchmarks. Existing native services can
+be used instead. Choose one service setup to avoid port conflicts.
+
+The schema accepts every malformed reason in the config, including NUL_BYTE.
+Reapply it after updating to install the NUL_BYTE constraint migration.
+Generated verification/ files are local artifacts and are excluded from Git.
+
+Pig 0.18 Hadoop compatibility is documented by Apache:
+https://pig.apache.org/releases.html
+
+This update covers shared setup and database contracts. Controller/loader,
+recovery implementation, frontend and additional pipeline work remain for
+the implementation phase.

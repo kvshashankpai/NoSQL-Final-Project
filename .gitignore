@@ -12,6 +12,7 @@ results/
 outputs/
 logs/
 runs/
+verification/
 
 # Python
 __pycache__/

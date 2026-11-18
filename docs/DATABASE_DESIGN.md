@@ -45,6 +45,7 @@ Table: `runs`. One row represents one pipeline execution attempt, including fail
 | `status` | `VARCHAR(20) NOT NULL` | `RUNNING`, `FAILED` or `COMPLETED` |
 | `started_at` | `TIMESTAMPTZ NOT NULL` | UTC execution start, captured when the timer starts |
 | `completed_at` | `TIMESTAMPTZ NULL` | Set together with `status = 'COMPLETED'` |
+| `results_committed_at` | `TIMESTAMPTZ NULL` | Durable result-transaction marker for planned recovery |
 | `elapsed_seconds` | `DOUBLE PRECISION NULL` | Authoritative measured runtime |
 | `total_records` | `BIGINT NULL` | Total input records |
 | `total_batches` | `BIGINT NULL` | Number of non-empty batches |
@@ -108,7 +109,7 @@ Table: `malformed_samples`. Stores the first 100 malformed examples per run in i
 
 Primary key: `(run_id, record_number)`.
 
-`CHECK (reason IN ('BLANK_LINE', 'BAD_STRUCTURE', 'BAD_HOST', 'BAD_TIMESTAMP', 'BAD_STATUS', 'BAD_BYTES'))`
+`CHECK (reason IN ('BLANK_LINE', 'NUL_BYTE', 'BAD_STRUCTURE', 'BAD_HOST', 'BAD_TIMESTAMP', 'BAD_STATUS', 'BAD_BYTES'))`
 
 PostgreSQL `TEXT` cannot contain U+0000. When loading a sample, the controller replaces each U+0000 in `raw_line` with the six characters `\u0000`. This affects only the stored sample text, never parsing or analytics.
 
@@ -208,18 +209,44 @@ Measured run:
 7. In one transaction:
    - insert batch statistics, malformed samples, phase timings, and all Q1, Q2 and Q3 rows;
    - update the run-level counts (`total_records`, `total_batches`, `malformed_count`, `average_batch_size`);
+   - set results_committed_at in the same transaction;
    - commit.
-8. Stop the timer.
+8. Stop the timer after commit acknowledgement.
 
 After the timer stops:
 
 9. In one statement, set `elapsed_seconds`, `completed_at` and `status = 'COMPLETED'`.
 
-On any failure in steps 5-9:
-- Roll back the open transaction, so no result rows remain.
-- Then set `status = 'FAILED'` and `error_message` in a separate transaction.
+### Completion publication and recovery contract
 
-A run that crashed while `RUNNING` is marked `FAILED` the next time the controller starts.
+The controller implementation will hold a dedicated PostgreSQL session-level
+advisory lock for the run UUID for the entire attempt. Acquire it before
+creating the RUNNING row and release it only after publication or failure
+handling. Recovery must try the same lock and skip runs owned by another
+session. Starting a controller is never sufficient evidence that other
+RUNNING runs have crashed.
+
+Immediately after the result commit acknowledgement, stop the monotonic timer.
+Atomically save run_id, elapsed_seconds and completed_at in completion.json
+in the run work directory, then update completion metadata and status together.
+The completion file is outside the measured interval and must survive until
+publication or recovery succeeds.
+
+Failure cases are distinct:
+
+- Before the result commit, roll back the open transaction and record FAILED.
+- After commit, keep committed rows hidden while the run remains RUNNING.
+  A failed publication can be retried using the durable completion file.
+- For an abandoned run whose session lock is free, valid completion metadata
+  plus results_committed_at permits publication as COMPLETED.
+- If exact completion metadata is unavailable, mark the abandoned run FAILED
+  and retain committed rows for diagnosis. Exclude them from all reports
+  and benchmarks. Never reconstruct elapsed time from database timestamps.
+
+A lost connection can make commit outcome uncertain. Check the durable marker
+during recovery instead of assuming the transaction rolled back.
+These are shared design requirements for the later controller/loader phase;
+this schema/document update does not implement those application components.
 
 Inserting the `RUNNING` row (step 4) is a single small commit inside the measured interval, and it is the same for every pipeline.
 

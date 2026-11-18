@@ -1,2 +1,4 @@
 # Fixture inputs and expected outputs are exact bytes: never convert line endings.
 tests/fixtures/** -text
+# CR and trailing-whitespace cases are intentional binary fixture content.
+tests/fixtures/**/*.log binary
