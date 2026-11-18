@@ -29,7 +29,7 @@
       {
         "name": "Pig",
         "directory": "pipelines/pig",
-        "launcher": null
+        "launcher": ["{python}", "-m", "pipelines.pig.adapter"]
       },
       {
         "name": "MapReduce",
