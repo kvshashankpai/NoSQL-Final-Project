@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 
 from controller.compare import compare_dirs, format_report
-from controller.adapters import launcher
+from controller.adapters import StartError, launcher
 from controller.validation import validate_output
 from etl_common.config import REPO_ROOT
 
@@ -61,6 +61,11 @@ def main(argv=None):
     ap.add_argument("--pipeline", required=True, help="pipeline name from the config, for example Pig or MapReduce")
     ap.add_argument("--fixture", action="append", default=None, help="fixture name (default: all)")
     args = ap.parse_args(argv)
+    try:
+        launcher(args.pipeline)
+    except (StartError, ValueError) as e:
+        print(f"cannot run fixtures: {e}", file=sys.stderr)
+        return 2
     return 0 if run_fixtures(args.pipeline, args.fixture) else 1
 
 
