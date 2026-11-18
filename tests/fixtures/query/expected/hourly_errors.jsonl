@@ -1,0 +1,7 @@
+{"batch_id": 1, "log_date": "1995-07-01", "log_hour": 10, "error_request_count": 1, "total_request_count": 3, "error_rate": 0.3333333333333333, "distinct_error_hosts": 1}
+{"batch_id": 2, "log_date": "1995-07-01", "log_hour": 11, "error_request_count": 1, "total_request_count": 1, "error_rate": 1.0, "distinct_error_hosts": 1}
+{"batch_id": 2, "log_date": "1995-07-02", "log_hour": 0, "error_request_count": 0, "total_request_count": 1, "error_rate": 0.0, "distinct_error_hosts": 0}
+{"batch_id": 3, "log_date": "1995-07-02", "log_hour": 0, "error_request_count": 1, "total_request_count": 1, "error_rate": 1.0, "distinct_error_hosts": 1}
+{"batch_id": null, "log_date": "1995-07-01", "log_hour": 10, "error_request_count": 1, "total_request_count": 3, "error_rate": 0.3333333333333333, "distinct_error_hosts": 1}
+{"batch_id": null, "log_date": "1995-07-01", "log_hour": 11, "error_request_count": 1, "total_request_count": 1, "error_rate": 1.0, "distinct_error_hosts": 1}
+{"batch_id": null, "log_date": "1995-07-02", "log_hour": 0, "error_request_count": 1, "total_request_count": 2, "error_rate": 0.5, "distinct_error_hosts": 1}

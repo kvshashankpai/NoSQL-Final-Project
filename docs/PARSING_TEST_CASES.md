@@ -58,13 +58,15 @@ Unless stated otherwise, the host is `199.72.81.55`, the timestamp is `01/Jul/19
 | T39 | Invalid time-zone offset minutes | Malformed, `BAD_TIMESTAMP` |
 | T40 | Lone CR inside a line | One record; valid; CR kept in the path |
 | T41 | Non-ASCII byte in the path | Valid; byte decoded as ISO-8859-1 |
-| T42 | NUL byte in a malformed line | Malformed, `BAD_STRUCTURE`; sample stored with `\u0000` |
+| T42 | Line consisting of a NUL byte | Malformed, `NUL_BYTE`; sample stored with `\u0000` |
 | T43 | Ident and authuser are not `-` | Valid |
 | T44 | Lowercase method | Valid; method case preserved |
 | T45 | Line containing only spaces | Malformed, `BAD_STRUCTURE` |
 | T46 | Bytes with leading zeros | Valid; bytes = 100 |
 | T47 | Single path-like request token | Valid; token becomes the method |
 | T48 | Host `-` and invalid status together | Malformed, `BAD_HOST` (precedence) |
+| T49 | NUL byte inside the path of an otherwise valid line | Malformed, `NUL_BYTE` |
+| T50 | NUL byte in a line that is also structurally invalid | Malformed, `NUL_BYTE` (precedence) |
 
 ## 2. Sample Records and Expected Results
 
@@ -282,7 +284,7 @@ Expected: valid; resource_path = `/café` (U+00E9). A UTF-8 decoder would produc
 
 A line consisting of `<NUL>` only.
 
-Expected: malformed, `BAD_STRUCTURE`. JSONL `raw_line` = `"\u0000"`. Stored in PostgreSQL as the six characters `\u0000`.
+Expected: malformed, `NUL_BYTE`. JSONL `raw_line` = `"\u0000"`. Stored in PostgreSQL as the six characters `\u0000`.
 
 ### T43 - Ident and authuser present
 
@@ -317,6 +319,18 @@ Expected: valid; http_method = `/index.html`; resource_path = NULL; protocol_ver
 `- - - [01/Jul/1995:00:00:01 -0400] "GET /history HTTP/1.0" ABC 100`
 
 Expected: malformed, `BAD_HOST`. The host check comes before the status check.
+
+### T49 - NUL inside a valid line
+
+`199.72.81.55 - - [01/Jul/1995:00:00:01 -0400] "GET /a<NUL>b HTTP/1.0" 200 100`
+
+Expected: malformed, `NUL_BYTE`. The record would otherwise parse, but PostgreSQL cannot store U+0000 in `resource_path` (`PARSING_RULES.md` section 9, NUL policy). It is excluded from Q1, Q2 and Q3.
+
+### T50 - NUL precedence
+
+`<NUL> garbage`
+
+Expected: malformed, `NUL_BYTE`. The NUL check comes before the structure check.
 
 ## 3. Batch and Record-Numbering Tests
 
@@ -413,7 +427,7 @@ Batch 2, hour 0 on 2 July, is the zero-error row that must still appear.
 
 These cases define the shared parsing and batching contract.
 
-Every implementation must be tested against the same cases before processing the complete NASA dataset. The cases should also be stored as fixture files under `tests/fixtures/`, with expected outputs, so that every adapter can be checked automatically.
+Every implementation must be tested against the same cases before processing the complete NASA dataset. The executable versions are in `tests/fixtures/` (see `tests/fixtures/README.md`), with the exact input bytes and the expected output files.
 
 A test passes only when the backend produces the expected validity, reason code, extracted fields, record metadata and query results.
 

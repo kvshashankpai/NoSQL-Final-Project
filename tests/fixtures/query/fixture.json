@@ -1,0 +1,7 @@
+{
+  "description": "Query fixture from docs/PARSING_TEST_CASES.md section 4.",
+  "batch_size": 3,
+  "inputs": [
+    "input/query.log"
+  ]
+}

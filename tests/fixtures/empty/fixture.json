@@ -1,0 +1,8 @@
+{
+  "description": "Two empty input files: zero records, zero batches.",
+  "batch_size": 5,
+  "inputs": [
+    "input/empty1.log",
+    "input/empty2.log"
+  ]
+}

@@ -61,7 +61,7 @@ The user selects exactly one pipeline for each run.
 7. The controller validates the adapter exit status and output files.
 8. The controller loads batch metadata, malformed samples, and all query results into PostgreSQL in one transaction.
 9. After the result transaction commits, the controller stops the timer.
-10. The controller saves elapsed seconds and marks the run `COMPLETED` in one statement. On any failure, it rolls back the results and marks the run `FAILED`.
+10. The controller saves elapsed seconds and marks the run `COMPLETED`. Failure handling and abandoned-run recovery are specified in `docs/DATABASE_DESIGN.md` section 12.
 
 The Python controller coordinates the work; it does not replace the ETL or analytics implementation of any backend.
 
@@ -97,7 +97,7 @@ Batch assignment:
 batch_id = floor((record_number - 1) / batch_size) + 1
 ```
 
-`scripts/create_batches.py` is retained as a diagnostic utility only. It is not used to create production batches.
+Every adapter assigns record numbers and batches with the shared staging stage in `etl_common/staging.py`, then processes one batch at a time in its engine (`docs/BATCHING_STRATEGY.md` sections 2 and 11). `scripts/create_batches.py` uses the same rules to write diagnostic batch files; it is not part of the production path.
 
 Average batch size is total input records divided by the number of non-empty batches. It is NULL when there are no non-empty batches.
 
@@ -247,8 +247,12 @@ NoSQL-Final-Project/
 │   ├── mongodb/
 │   └── pig/
 ├── reporting/
+├── etl_common/               # Shared staging stage and config loading
+├── tests/                    # Fixtures, oracle (test-only), unit and integration tests
+├── verification/             # Input verification records (scripts/verify_inputs.py)
 └── scripts/
-    └── create_batches.py     # Diagnostic utility only
+    ├── create_batches.py     # Diagnostic utility only
+    └── verify_inputs.py      # Input order, sizes and SHA-256
 ```
 
 Directories are intended locations for project components. A placeholder directory does not imply that its implementation is complete.
@@ -280,14 +284,17 @@ This README documents the agreed project design and interfaces. It does not clai
 
 Update this section as implementation progresses:
 
-- [ ] Python controller and adapter orchestration
-- [ ] PostgreSQL schema and transactional loader
+- [x] Executable test fixtures, output validator and comparator (`tests/`, `controller/validation.py`, `controller/compare.py`)
+- [x] Shared staging stage for record numbering and batches (`etl_common/staging.py`)
+- [x] Fixture runner for any adapter (`python -m controller.fixture_runner --pipeline <name>`)
+- [x] MongoDB adapter; passes all five fixtures on MongoDB 8.0.20
+- [x] PostgreSQL schema (`database/schema.sql`)
+- [ ] Controller run lifecycle, transactional loader and recovery
+- [ ] Report and Streamlit frontend with run history and comparison
+- [ ] MongoDB run on the full NASA dataset
 - [ ] Apache Pig adapter
 - [ ] Hadoop MapReduce adapter
-- [ ] MongoDB adapter
 - [ ] Apache Hive adapter
-- [ ] Streamlit frontend
-- [ ] Reporting and run comparison
 - [ ] Cross-pipeline parsing and batching validation
 - [ ] Full-dataset correctness validation
 - [ ] Repeated benchmark trials
@@ -304,3 +311,4 @@ Refer to the `docs/` directory for the authoritative project contracts:
 - `DATABASE_DESIGN.md` — PostgreSQL tables, relationships, and transactional loading.
 - `EXPERIMENT_DESIGN.md` — benchmark methodology and reproducibility.
 - `IMPLEMENTATION_ROADMAP.md` — implementation stages, validation gates, and open design decisions.
+- `ENVIRONMENT.md` — versions, connection settings, starting services, and adapter launch commands.

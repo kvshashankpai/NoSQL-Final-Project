@@ -1,0 +1,3 @@
+{"source_file": "part1.log", "record_number": 3, "batch_id": 2, "reason": "BAD_BYTES", "raw_line": "a3 - - [01/Jul/1995:10:00:00 -0400] \"GET /bare-cr HTTP/1.0\" 200 10\r"}
+{"source_file": "part2.log", "record_number": 5, "batch_id": 3, "reason": "BLANK_LINE", "raw_line": ""}
+{"source_file": "part4.log", "record_number": 8, "batch_id": 4, "reason": "BLANK_LINE", "raw_line": ""}

@@ -148,7 +148,7 @@ The exact executable differs by backend, but the argument contract remains commo
 11. Transaction commits successfully.
 12. Runtime measurement stops.
 13. Elapsed time is saved and the run is marked `COMPLETED` in one statement.
-14. On any failure in steps 6-13, the result transaction is rolled back and the run is marked `FAILED` with an error message.
+14. Failure handling and abandoned-run recovery follow `DATABASE_DESIGN.md` section 12.
 15. Streamlit displays the completed run.
 
 ## 7. Failure Handling

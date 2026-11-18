@@ -1,0 +1,22 @@
+{"source_file": "cases.log", "record_number": 8, "batch_id": 1, "reason": "BAD_TIMESTAMP", "raw_line": "199.72.81.55 - - [INVALID] \"GET /history/apollo/ HTTP/1.0\" 200 6245"}
+{"source_file": "cases.log", "record_number": 9, "batch_id": 1, "reason": "BAD_STRUCTURE", "raw_line": " - - [01/Jul/1995:00:00:01 -0400] \"GET /history/apollo/ HTTP/1.0\" 200 6245"}
+{"source_file": "cases.log", "record_number": 10, "batch_id": 1, "reason": "BAD_HOST", "raw_line": "- - - [01/Jul/1995:00:00:01 -0400] \"GET /history/apollo/ HTTP/1.0\" 200 6245"}
+{"source_file": "cases.log", "record_number": 11, "batch_id": 2, "reason": "BAD_STRUCTURE", "raw_line": "199.72.81.55 - - [01/Jul/1995:00:00:01 -0400] \"GET /history/apollo/ HTTP/1.0\""}
+{"source_file": "cases.log", "record_number": 12, "batch_id": 2, "reason": "BAD_STATUS", "raw_line": "199.72.81.55 - - [01/Jul/1995:00:00:01 -0400] \"GET /history/apollo/ HTTP/1.0\" ABC 6245"}
+{"source_file": "cases.log", "record_number": 13, "batch_id": 2, "reason": "BAD_BYTES", "raw_line": "199.72.81.55 - - [01/Jul/1995:00:00:01 -0400] \"GET /history/apollo/ HTTP/1.0\" 200 abc"}
+{"source_file": "cases.log", "record_number": 14, "batch_id": 2, "reason": "BAD_STRUCTURE", "raw_line": "199.72.81.55 - - [01/Jul/1995:00:00:01 -0400] \"GET /history/apollo/ HTTP/1.0 200 6245"}
+{"source_file": "cases.log", "record_number": 26, "batch_id": 3, "reason": "BAD_BYTES", "raw_line": "199.72.81.55 - - [01/Jul/1995:00:00:01 -0400] \"GET /history HTTP/1.0\" 200 -1"}
+{"source_file": "cases.log", "record_number": 27, "batch_id": 3, "reason": "BLANK_LINE", "raw_line": ""}
+{"source_file": "cases.log", "record_number": 28, "batch_id": 3, "reason": "BAD_TIMESTAMP", "raw_line": "199.72.81.55 - - [32/Jul/1995:00:00:01 -0400] \"GET /history HTTP/1.0\" 200 100"}
+{"source_file": "cases.log", "record_number": 29, "batch_id": 3, "reason": "BAD_TIMESTAMP", "raw_line": "199.72.81.55 - - [01/Jul/1995:25:00:00 -0400] \"GET /history HTTP/1.0\" 200 100"}
+{"source_file": "cases.log", "record_number": 30, "batch_id": 3, "reason": "BAD_BYTES", "raw_line": "199.72.81.55 - - [01/Jul/1995:00:00:01 -0400] \"GET /history HTTP/1.0\" 200 9223372036854775808"}
+{"source_file": "cases.log", "record_number": 33, "batch_id": 4, "reason": "BAD_STRUCTURE", "raw_line": "199.72.81.55 - - [01/Jul/1995:00:00:01 -0400] \"GET /history HTTP/1.0\" 200 100 extra"}
+{"source_file": "cases.log", "record_number": 35, "batch_id": 4, "reason": "BAD_TIMESTAMP", "raw_line": "199.72.81.55 - - [31/Jun/1995:12:00:00 -0400] \"GET /history HTTP/1.0\" 200 100"}
+{"source_file": "cases.log", "record_number": 36, "batch_id": 4, "reason": "BAD_TIMESTAMP", "raw_line": "199.72.81.55 - - [29/Feb/1995:12:00:00 -0400] \"GET /history HTTP/1.0\" 200 100"}
+{"source_file": "cases.log", "record_number": 38, "batch_id": 4, "reason": "BAD_TIMESTAMP", "raw_line": "199.72.81.55 - - [01/jul/1995:12:00:00 -0400] \"GET /history HTTP/1.0\" 200 100"}
+{"source_file": "cases.log", "record_number": 39, "batch_id": 4, "reason": "BAD_TIMESTAMP", "raw_line": "199.72.81.55 - - [01/Jul/1995:12:00:00 -0460] \"GET /history HTTP/1.0\" 200 100"}
+{"source_file": "cases.log", "record_number": 42, "batch_id": 5, "reason": "NUL_BYTE", "raw_line": "\u0000"}
+{"source_file": "cases.log", "record_number": 45, "batch_id": 5, "reason": "BAD_STRUCTURE", "raw_line": "   "}
+{"source_file": "cases.log", "record_number": 48, "batch_id": 5, "reason": "BAD_HOST", "raw_line": "- - - [01/Jul/1995:00:00:01 -0400] \"GET /history HTTP/1.0\" ABC 100"}
+{"source_file": "cases.log", "record_number": 49, "batch_id": 5, "reason": "NUL_BYTE", "raw_line": "199.72.81.55 - - [01/Jul/1995:00:00:01 -0400] \"GET /a\u0000b HTTP/1.0\" 200 100"}
+{"source_file": "cases.log", "record_number": 50, "batch_id": 5, "reason": "NUL_BYTE", "raw_line": "\u0000 garbage"}

@@ -1,0 +1,7 @@
+{
+  "description": "One line per test case T01-T50 from docs/PARSING_TEST_CASES.md, LF terminated.",
+  "batch_size": 10,
+  "inputs": [
+    "input/cases.log"
+  ]
+}

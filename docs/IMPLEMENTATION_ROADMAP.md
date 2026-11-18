@@ -130,7 +130,7 @@ Implement each backend independently. The selected backend must perform
 its own input reading, record numbering, batch assignment, parsing,
 transformations, and query aggregations.
 
-Resolve open decisions D1 and D2 (section 15) before starting this
+Follow decisions D1 and D2 (section 15) in this
 stage, and read the backend warnings in `PARSING_RULES.md` section 11.
 
 ### 7.1 Apache Pig
@@ -195,7 +195,9 @@ processing.
 -   [ ] Mark the run complete only after elapsed time is saved.
 -   [ ] Mark failures as `FAILED` with an error message, without
     publishing partial query results.
--   [ ] Mark runs left `RUNNING` by a crash as `FAILED` on startup.
+-   [ ] Implement failure handling and abandoned-run recovery as
+    specified in `DATABASE_DESIGN.md` section 12. Recovery must never
+    touch a run that another controller is still executing.
 
 ### Completion gate
 
@@ -330,41 +332,20 @@ adapter interface.
 
 ## 15. Open Design Decisions
 
-These must be agreed by the team and recorded here before the four
-adapters are built in parallel.
+Decisions are recorded here. D1 and D2 are decided; D3 and D4 are still open.
 
-### D1 - How each backend assigns continuous record numbers
+### D1 - How each backend assigns continuous record numbers (decided)
 
-Hadoop-based engines read input splits in parallel, so no single task
-knows a line's global record number. The options are:
+Every adapter uses the shared staging stage in `etl_common/staging.py`.
+It reads the original files, numbers records and assigns batch IDs, and
+passes unchanged record text to the engine. See `BATCHING_STRATEGY.md`
+section 2.
 
--   **Engine-native numbering.** Examples: Hive
-    `ROW_NUMBER() OVER (ORDER BY <file order>, BLOCK__OFFSET__INSIDE__FILE)`;
-    Pig `RANK` with no sort key; a MapReduce pre-pass that counts lines per
-    split and adds up the counts. This keeps everything in the engine but
-    adds jobs, and a total sort may force a single reducer.
--   **Adapter staging step.** A small, identical step in each adapter
-    reads the original files and writes each *unchanged* line with its
-    record number and batch ID (allowed by the original run contract).
-    This is simpler and identical for all engines, but it must not parse,
-    clean or filter, and it must be inside the measured runtime.
+### D2 - What "processing in batches" means for each backend (decided)
 
-Whichever is chosen, it must handle LF-only terminators and ISO-8859-1
-decoding (`PARSING_RULES.md` section 11).
-
-### D2 - What "processing in batches" means for each backend
-
-If every backend only tags records with `batch_id` and groups by it in
-one job, runtime barely changes with batch size, and the B1/B2/B3
-experiment shows little. A grader may also argue that the input is not
-really processed in batches. Agree one equivalent meaning for all four,
-for example:
-
--   **MongoDB:** insert and aggregate one batch at a time.
--   **Hive:** one partition per batch.
--   **Pig and MapReduce:** one input directory or job per batch.
-
-Then compute the whole-run results from the combined staged data.
+Each engine parses and computes per-batch results one batch at a time,
+then computes whole-run results from all parsed records. See
+`BATCHING_STRATEGY.md` section 11 for the concrete steps per engine.
 
 ### D3 - NULL batch ID for whole-run rows
 

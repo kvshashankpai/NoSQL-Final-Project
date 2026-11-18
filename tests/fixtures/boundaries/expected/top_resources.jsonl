@@ -1,0 +1,10 @@
+{"batch_id": 1, "rank": 1, "resource_path": "/crlf", "request_count": 1, "total_bytes": 10, "distinct_host_count": 1}
+{"batch_id": 1, "rank": 2, "resource_path": "/lf", "request_count": 1, "total_bytes": 10, "distinct_host_count": 1}
+{"batch_id": 2, "rank": 1, "resource_path": "/after-boundary", "request_count": 1, "total_bytes": 10, "distinct_host_count": 1}
+{"batch_id": 3, "rank": 1, "resource_path": "/crlf2", "request_count": 1, "total_bytes": 10, "distinct_host_count": 1}
+{"batch_id": 4, "rank": 1, "resource_path": "/unterminated", "request_count": 1, "total_bytes": 10, "distinct_host_count": 1}
+{"batch_id": null, "rank": 1, "resource_path": "/after-boundary", "request_count": 1, "total_bytes": 10, "distinct_host_count": 1}
+{"batch_id": null, "rank": 2, "resource_path": "/crlf", "request_count": 1, "total_bytes": 10, "distinct_host_count": 1}
+{"batch_id": null, "rank": 3, "resource_path": "/crlf2", "request_count": 1, "total_bytes": 10, "distinct_host_count": 1}
+{"batch_id": null, "rank": 4, "resource_path": "/lf", "request_count": 1, "total_bytes": 10, "distinct_host_count": 1}
+{"batch_id": null, "rank": 5, "resource_path": "/unterminated", "request_count": 1, "total_bytes": 10, "distinct_host_count": 1}

@@ -17,11 +17,11 @@
     "default_batch_size": 1000000,
     "batch_id_start": 1,
     "batch_id_rule": "floor((record_number - 1) / batch_size) + 1",
-    "owner": "Selected backend adapter",
+    "owner": "Selected backend adapter, using the shared staging stage",
     "record_numbering": "Continuous across input files",
     "include_final_partial_batch": true,
     "temporary_directory": "data/work",
-    "central_controller_creates_batches": false
+    "staging_module": "etl_common/staging.py"
   },
   "pipelines": {
     "execution_mode": "Exactly one selected pipeline per run",
@@ -39,7 +39,11 @@
       {
         "name": "MongoDB",
         "directory": "pipelines/mongodb",
-        "launcher": null
+        "launcher": [
+          "{python}",
+          "-m",
+          "pipelines.mongodb.adapter"
+        ]
       },
       {
         "name": "Hive",
@@ -51,7 +55,12 @@
       "batch_size": "--batch-size",
       "output_directory": "--output-dir",
       "input_file": "--input",
-      "input_argument_rule": "Repeat --input for each file in the configured order"
+      "input_argument_rule": "Repeat --input for each file in the configured order",
+      "optional_flags": {
+        "--debug-parsed": "also write parsed_records.jsonl (fixtures only)",
+        "--engine-info": "print engine versions as JSON and exit"
+      },
+      "launcher_placeholder": "{python} is replaced by the controller's Python interpreter"
     }
   },
   "database": {
@@ -91,11 +100,15 @@
     ],
     "malformed_reason_codes": [
       "BLANK_LINE",
+      "NUL_BYTE",
       "BAD_STRUCTURE",
       "BAD_HOST",
       "BAD_TIMESTAMP",
       "BAD_STATUS",
       "BAD_BYTES"
+    ],
+    "debug_files": [
+      "parsed_records.jsonl"
     ]
   },
   "queries": [

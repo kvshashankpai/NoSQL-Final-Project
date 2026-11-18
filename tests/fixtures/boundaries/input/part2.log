@@ -1,0 +1,4 @@
+b1 - - [01/Jul/1995:10:00:00 -0400] "GET /after-boundary HTTP/1.0" 200 10
+
+b3 - - [01/Jul/1995:10:00:00 -0400] "GET /crlf2 HTTP/1.0" 200 10
+b4 - - [01/Jul/1995:10:00:00 -0400] "GET /unterminated HTTP/1.0" 200 10

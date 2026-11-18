@@ -66,6 +66,7 @@ Rules:
 - Preserve the original timestamp string (the text inside the brackets) as `timestamp`.
 - Month abbreviations are case-sensitive English (`Jul` is valid, `jul` and `JUL` are not).
 - Validate strictly, with no rollover:
+  - the year must be `0001` or later;
   - the day must exist in that month and year, using Gregorian leap years (`29/Feb/1996` is valid, `29/Feb/1995`, `31/Jun/1995` and `32/Jul/1995` are not);
   - hour `00`-`23`, minute `00`-`59`, second `00`-`59`;
   - offset hours `00`-`23` and offset minutes `00`-`59`.
@@ -159,11 +160,14 @@ Checks run in this order. The first check that fails gives the record's single r
 | Order | Reason code | Condition |
 |---|---|---|
 | 1 | `BLANK_LINE` | The line is empty after terminator removal |
-| 2 | `BAD_STRUCTURE` | The line does not match the outer pattern in section 5 (includes missing host, unclosed request quote, missing status, extra trailing tokens, and lines made only of whitespace) |
-| 3 | `BAD_HOST` | The host is exactly `-` |
-| 4 | `BAD_TIMESTAMP` | The bracket text fails section 4 |
-| 5 | `BAD_STATUS` | The status token fails section 7 |
-| 6 | `BAD_BYTES` | The bytes token fails section 8 |
+| 2 | `NUL_BYTE` | The line contains U+0000 (input byte `0x00`) anywhere |
+| 3 | `BAD_STRUCTURE` | The line does not match the outer pattern in section 5 (includes missing host, unclosed request quote, missing status, extra trailing tokens, and lines made only of whitespace) |
+| 4 | `BAD_HOST` | The host is exactly `-` |
+| 5 | `BAD_TIMESTAMP` | The bracket text fails section 4 |
+| 6 | `BAD_STATUS` | The status token fails section 7 |
+| 7 | `BAD_BYTES` | The bytes token fails section 8 |
+
+**NUL policy.** A record containing U+0000 is malformed even if every field would otherwise parse. Reason: PostgreSQL text columns cannot store U+0000, and a NUL inside a host or resource path would otherwise have to be changed before loading, giving different group keys in the database than in the engine. Rejecting the record keeps every engine and the database identical. The record is still counted, keeps its batch, and can appear in malformed samples (stored as described in `DATABASE_DESIGN.md` section 6).
 
 Each malformed input line must be counted exactly once, with exactly one reason code.
 

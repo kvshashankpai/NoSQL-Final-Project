@@ -1,0 +1,10 @@
+{
+  "description": "File boundaries: CRLF, a bare CR at the end of an unterminated last line, an unterminated last line, an empty file in the middle, and a file of one LF.",
+  "batch_size": 2,
+  "inputs": [
+    "input/part1.log",
+    "input/part2.log",
+    "input/part3.log",
+    "input/part4.log"
+  ]
+}

@@ -168,7 +168,7 @@ Retain the first 100 malformed records in input order for each run.
 | reason | STRING | One malformation reason code from `PARSING_RULES.md` section 9 |
 | raw_line | STRING | Original record content after line-terminator removal |
 
-`reason` must be one of the fixed codes (`BLANK_LINE`, `BAD_STRUCTURE`, `BAD_HOST`, `BAD_TIMESTAMP`, `BAD_STATUS`, `BAD_BYTES`), chosen by the precedence order in `PARSING_RULES.md`, so samples are comparable across pipelines.
+`reason` must be one of the fixed codes (`BLANK_LINE`, `NUL_BYTE`, `BAD_STRUCTURE`, `BAD_HOST`, `BAD_TIMESTAMP`, `BAD_STATUS`, `BAD_BYTES`), chosen by the precedence order in `PARSING_RULES.md`, so samples are comparable across pipelines.
 
 `raw_line` is written as a JSON string. A U+0000 character (input byte `0x00`) is written as the JSON escape `\u0000`; see `DATABASE_DESIGN.md` for how it is stored.
 
@@ -185,6 +185,10 @@ Every adapter produces the following files in its run-specific output directory:
 - `malformed_samples.jsonl`
 
 An adapter may also write an optional `phase_timings.jsonl`, one object per phase with `phase_name` (string) and `duration_seconds` (number). It is diagnostic only and feeds the `phase_timings` table.
+
+When started with `--debug-parsed`, an adapter also writes `parsed_records.jsonl`: one object per input record with `record_number`, `batch_id`, `source_file`, `valid`, `reason` (NULL when valid), and the nine fields of section 3 (all NULL when malformed). It is used only by the test fixtures and is never loaded into PostgreSQL. It is not written during benchmark runs.
+
+Entries in the output directory whose names start with `_` (for example the adapter's `_work/` directory) are ignored by the validator.
 
 Output encoding is UTF-8.
 

@@ -1,0 +1,7 @@
+{
+  "description": "Top-20 cut-off with a tie across ranks 19-23 and binary UTF-8 ordering.",
+  "batch_size": 50,
+  "inputs": [
+    "input/top20.log"
+  ]
+}
