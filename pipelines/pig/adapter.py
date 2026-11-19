@@ -1,4 +1,7 @@
-"""Run one complete Pig adapter invocation against the configured HDFS/YARN."""
+"""Run one complete Pig adapter invocation in the shared Hadoop execution mode.
+
+yarn: HDFS and YARN (pig -x mapreduce). local: local file system (pig -x local).
+"""
 
 import argparse
 import json
@@ -10,10 +13,12 @@ from contextlib import ExitStack
 from itertools import chain, groupby
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from time import perf_counter
 from uuid import uuid4
 
 from controller.outputs import REQUIRED_FILES, SAMPLE_LIMIT, TOP_N
-from etl_common.config import default_batch_size, default_input_files, load_dotenv, repo_path
+from etl_common.config import (default_batch_size, default_input_files, hadoop_execution_mode,
+                               load_dotenv, repo_path)
 from etl_common.staging import iter_records, staged_line
 
 HERE = Path(__file__).resolve().parent
@@ -29,7 +34,7 @@ def executable(home, name):
     path = str(Path(root).expanduser().resolve() / "bin" / name) if root else name
     full_path = shutil.which(path)
     if full_path is None:
-        raise ValueError(f"{name} was not found. Set {home} as described in the Pig README.")
+        raise ValueError(f"{name} was not found. Set {home} (see env.sh).")
     return full_path
 
 
@@ -39,7 +44,7 @@ def engine_info():
         "hadoop": [executable("HADOOP_HOME", "hadoop"), "version"],
         "java": [executable("JAVA_HOME", "java"), "-version"],
     }
-    versions = {"execution_mode": "mapreduce"}
+    versions = {"execution_mode": hadoop_execution_mode()}
     for name, command in commands.items():
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 check=True, encoding="utf-8", errors="replace")
@@ -59,6 +64,11 @@ class PigJob:
         self.pig = executable("PIG_HOME", "pig")
         self.root = f"/tmp/nosql-pig-{uuid4().hex}"
         self.log = work / "engine.log"
+        local = hadoop_execution_mode() == "local"
+        self.exec_type = "local" if local else "mapreduce"
+        # In local mode the job paths are on the local file system, so point
+        # the hdfs dfs commands there as well.
+        self.fs = ["-fs", "file:///"] if local else []
 
         jar = HERE / "build" / "pig-helpers.jar"
         if not jar.is_file():
@@ -85,11 +95,11 @@ class PigJob:
             raise RuntimeError(f"{Path(args[0]).name} exited with {result.returncode}.\n{tail}")
 
     def dfs(self, *args):
-        self.command(self.hdfs, "dfs", *args)
+        self.command(self.hdfs, "dfs", *self.fs, *args)
 
     def run(self, script, result, **parameters):
         options = {"ROOT": self.root, "RESULT": result, "TOP_N": TOP_N, **parameters}
-        args = ["-x", "mapreduce", "-logfile", "pig.log"]
+        args = ["-x", self.exec_type, "-logfile", "pig.log"]
         for key, value in options.items():
             args.extend(("-param", f"{key}={value}"))
         self.command(self.pig, *args, "-f", script)
@@ -123,8 +133,17 @@ def write_queries(streams, result, batch_id):
                 emit(streams[output], {"batch_id": batch_id, **row})
 
 
-def process_batches(job, records, streams, debug):
+def process_batches(job, records, streams, debug, timings):
+    """timings collects seconds per phase: staging (write and upload the batch),
+    pig (Pig jobs) and collect (download and package the results)."""
     staged = job.work / "records.txt"
+    clock = perf_counter()
+
+    def lap(phase):
+        nonlocal clock
+        now = perf_counter()
+        timings[phase] = timings.get(phase, 0.0) + now - clock
+        clock = now
     samples_written = 0
     valid_count = 0
     for batch_id, batch in groupby(records, key=lambda record: record.batch_id):
@@ -137,8 +156,10 @@ def process_batches(job, records, streams, debug):
         result = f"{job.root}/result-{batch_id}"
         job.dfs("-put", staged.name, source)
         staged.unlink()
+        lap("staging")
         job.run("batch-job.pig", result, INPUT=source, PARSED=f"{job.root}/parsed/{batch_id}",
                 SAMPLE_LIMIT=SAMPLE_LIMIT)
+        lap("pig")
 
         with TemporaryDirectory(dir=job.work, prefix="parts-") as download:
             job.dfs("-get", result, download)
@@ -157,13 +178,16 @@ def process_batches(job, records, streams, debug):
                 for row in rows(local / "debug"):
                     emit(streams["parsed_records.jsonl"], {"batch_id": batch_id, **row})
         job.dfs("-rm", "-r", "-skipTrash", source, result)
+        lap("collect")
 
     if valid_count:
         result = f"{job.root}/whole"
         job.run("whole-job.pig", result, PARSED=f"{job.root}/parsed")
+        lap("pig")
         with TemporaryDirectory(dir=job.work, prefix="parts-") as download:
             job.dfs("-get", result, download)
             write_queries(streams, Path(download) / "whole", None)
+        lap("collect")
 
 
 def run_adapter(inputs, batch_size, output, debug):
@@ -178,6 +202,7 @@ def run_adapter(inputs, batch_size, output, debug):
     work = output / "_work"
     work.mkdir()
     names = REQUIRED_FILES + (["parsed_records.jsonl"] if debug else [])
+    timings = {}
     # Peek once so empty inputs still produce all required files without a Hadoop job.
     records = iter_records(inputs, batch_size)
     first = next(records, None)
@@ -190,12 +215,15 @@ def run_adapter(inputs, batch_size, output, debug):
             job.dfs("-mkdir", job.root)
             try:
                 job.dfs("-mkdir", f"{job.root}/tmp", f"{job.root}/parsed")
-                process_batches(job, chain((first,), records), streams, debug)
+                process_batches(job, chain((first,), records), streams, debug, timings)
                 job.dfs("-rm", "-r", "-skipTrash", job.root)
             except (Exception, KeyboardInterrupt):
                 print(f"Pig diagnostics: {job.log}; HDFS work path: {job.root}", file=sys.stderr)
                 raise
-    for name in names:
+    with (work / "phase_timings.jsonl").open("x", encoding="utf-8", newline="\n") as stream:
+        for phase, seconds in timings.items():
+            emit(stream, {"phase_name": phase, "duration_seconds": seconds})
+    for name in names + ["phase_timings.jsonl"]:
         (work / name).replace(output / name)
 
 

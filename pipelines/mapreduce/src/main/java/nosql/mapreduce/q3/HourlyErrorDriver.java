@@ -2,6 +2,7 @@
 package nosql.mapreduce.q3;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
@@ -11,6 +12,9 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 public class HourlyErrorDriver {
 
     public static void main(String[] args) throws Exception {
+        // Execution mode comes from -D options (the adapter) or the Hadoop site config.
+        Configuration configuration = new Configuration();
+        args = new GenericOptionsParser(configuration, args).getRemainingArgs();
 
         if (args.length != 2) {
             System.err.println(
@@ -19,11 +23,7 @@ public class HourlyErrorDriver {
             System.exit(2);
         }
 
-        Configuration configuration = new Configuration();
-
-        configuration.set("mapreduce.framework.name", "local");
         configuration.set("textinputformat.record.delimiter", "\n");
-        configuration.set("fs.defaultFS", "file:///");
 
         Job job = Job.getInstance(configuration, "Q3 Hourly Error Analysis");
 

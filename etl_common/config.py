@@ -52,3 +52,22 @@ def adapter_config(name, config=None):
             return adapter
     names = ", ".join(a["name"] for a in config["pipelines"]["adapters"])
     raise ValueError(f"Unknown pipeline {name!r}. Choose one of: {names}")
+
+
+HADOOP_MODES = ("yarn", "local")
+
+
+def hadoop_execution_mode(config=None):
+    """Execution mode shared by the Hadoop-based adapters (Pig and MapReduce).
+
+    HADOOP_EXECUTION_MODE in the environment or .env overrides the config, so a
+    benchmark can switch both engines together. Compare runtimes only between
+    runs made in the same mode.
+    """
+    import os
+    config = config or load_config()
+    mode = os.environ.get("HADOOP_EXECUTION_MODE") or config["pipelines"]["hadoop_execution_mode"]
+    mode = mode.strip().lower()
+    if mode not in HADOOP_MODES:
+        raise ValueError(f"Hadoop execution mode must be one of {', '.join(HADOOP_MODES)}, not {mode!r}")
+    return mode

@@ -17,7 +17,7 @@ Use the same machine and the same engine execution mode for every benchmark run 
 |---|---|---|
 | Python | 3.11 or later | Controller, adapters' launch scripts, tools |
 | PostgreSQL | 16 (15 minimum) | `UNIQUE NULLS NOT DISTINCT` needs 15+ |
-| Java for Hadoop and Pig | OpenJDK 8 | Supported by Hadoop 3.3 and Pig 0.18 |
+| Java for Hadoop and Pig | OpenJDK 11 | Hadoop 3.3 runs on Java 8 or 11; the committed MapReduce JAR is Java 11 bytecode (class version 55) |
 | Hadoop | 3.3.6 | Single-node pseudo-distributed (HDFS + YARN); also runs the MapReduce adapter |
 | Pig | 0.18.0 | Apache documents Hadoop 3 support for this release; validate the chosen runtime with fixtures during implementation |
 
@@ -39,6 +39,7 @@ Copy `.env.example` to `.env` (git-ignored) and edit it. The adapters and tools 
 |---|---|---|
 | `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD` | PostgreSQL loading and reporting | libpq defaults |
 | `PGDATABASE` | PostgreSQL loading and reporting | `nosql_final_project` (from the config) |
+| `HADOOP_EXECUTION_MODE` | Pig and MapReduce adapters | `pipelines.hadoop_execution_mode` in the config (`yarn`) |
 
 ## 4. Installing and starting services (Ubuntu 24.04)
 
@@ -55,14 +56,28 @@ psql -v ON_ERROR_STOP=1 -d nosql_final_project -f database/schema.sql
 
 ### Hadoop and Pig
 
-Install OpenJDK 8 and unpack the release archives under `/opt`. Set `JAVA_HOME`, `HADOOP_HOME` and `PIG_HOME`, and add their `bin` directories to `PATH`. Configure Hadoop as a single-node pseudo-distributed cluster (Hadoop documentation: "Single Node Setup"), then:
+Install OpenJDK 11 and unpack the release archives under `/opt`. Set `JAVA_HOME`, `HADOOP_HOME` and `PIG_HOME`, and add their `bin` directories to `PATH`. Configure Hadoop as a single-node pseudo-distributed cluster (Hadoop documentation: "Single Node Setup"), then:
 
 ```bash
 hdfs namenode -format              # first time only
 start-dfs.sh && start-yarn.sh
+mapred --daemon start historyserver   # Pig polls it after every job; without it Pig stalls on localhost:10020
 ```
 
-The Pig and MapReduce adapters must run in this same mode, and they must set `textinputformat.record.delimiter` to `\n` (`PARSING_RULES.md` section 11).
+On WSL, start the daemons with `setsid` (for example `setsid start-yarn.sh`) so they survive the end of the launching shell.
+
+### Hadoop execution mode
+
+Both Hadoop-based adapters read one shared setting, `pipelines.hadoop_execution_mode` in `config/project_config.json`, which `HADOOP_EXECUTION_MODE` overrides:
+
+| Mode | Pig | MapReduce |
+|---|---|---|
+| `yarn` (default) | `pig -x mapreduce`; job data in HDFS | drivers run as YARN applications; job data in HDFS |
+| `local` | `pig -x local`; local file system | Hadoop LocalJobRunner; local file system |
+
+Each adapter reports the mode in `--engine-info` (`execution_mode`). Compare runtimes only between runs made in the same mode. In `yarn` mode every Hadoop job pays YARN application startup (tens of seconds on a single node), so the number of jobs per batch dominates the runtime.
+
+The Pig and MapReduce adapters must set `textinputformat.record.delimiter` to `\n` (`PARSING_RULES.md` section 11).
 
 ### Windows portable setup (development checks only)
 
@@ -87,7 +102,7 @@ python -m controller.compare EXPECTED_DIR ACTUAL_DIR             # row-by-row co
 python -m pytest                                                 # offline tests
 ```
 
-The controller's `run` command, the PostgreSQL loader and the report come with the PostgreSQL layer.
+`python run.py --pipeline Pig|MapReduce` runs one pipeline end to end and loads PostgreSQL (`python run.py --help`). `wsl/README.md` has WSL helper scripts and measured runtimes.
 
 ## 6. Adapter launch commands
 
@@ -95,8 +110,8 @@ The controller runs `launcher + --batch-size N --output-dir DIR --input FILE ...
 
 | Pipeline | Launcher | Status |
 |---|---|---|
-| Pig | `null` | In progress |
-| MapReduce | `{python} pipelines/mapreduce/adapter.py` | Phase 1 prototype |
+| Pig | `{python} -m pipelines.pig.adapter` | Implemented |
+| MapReduce | `{python} pipelines/mapreduce/adapter.py` | Implemented |
 
 The team is running only the Pig and MapReduce pipelines. The MongoDB and Hive entries in the config have no launcher.
 

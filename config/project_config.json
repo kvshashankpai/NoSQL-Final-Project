@@ -25,6 +25,11 @@
   },
   "pipelines": {
     "execution_mode": "Exactly one selected pipeline per run",
+    "hadoop_execution_mode": "yarn",
+    "hadoop_execution_modes": {
+      "yarn": "Pseudo-distributed: HDFS for job data, one YARN application per job",
+      "local": "Hadoop LocalJobRunner on the local file system, one JVM per job"
+    },
     "adapters": [
       {
         "name": "Pig",

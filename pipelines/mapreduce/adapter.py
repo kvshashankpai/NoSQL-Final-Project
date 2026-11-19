@@ -19,6 +19,7 @@ import time
 import traceback
 from collections import defaultdict
 from pathlib import Path
+from uuid import uuid4
 
 # Ensure the project root is available when this adapter is run directly.
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -31,6 +32,7 @@ from etl_common.config import (
     default_input_files,
     default_batch_size,
     adapter_config,
+    hadoop_execution_mode,
     repo_path,
 )
 
@@ -42,7 +44,7 @@ def engine_info():
     info = {
         "pipeline": "MapReduce",
         "engine": "Hadoop MapReduce",
-        "execution_mode": "local",
+        "execution_mode": hadoop_execution_mode(),
         "adapter": "pipelines/mapreduce/adapter.py",
     }
     print(json.dumps(info, indent=2))
@@ -115,8 +117,81 @@ def read_part_files(output_dir):
     return lines
 
 
+class HadoopRunner:
+    """Runs driver jobs in the configured execution mode.
+
+    local: LocalJobRunner on the local file system.
+    yarn:  job data lives in HDFS and each job is a YARN application, like the
+           Pig adapter. Outputs are copied back to the local output directory;
+           an output that is the input of a later job is read from HDFS again.
+    """
+
+    def __init__(self, mode):
+        self.mode = mode
+        self.remote = {}
+        self.root = f"/tmp/nosql-mapreduce-{uuid4().hex}"
+        self.started = False
+        self.names = 0
+
+    def _run(self, command, what):
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"{what} failed.\nCommand: {' '.join(command)}\n"
+                f"STDOUT:\n{result.stdout[-3000:]}\nSTDERR:\n{result.stderr[-3000:]}"
+            )
+        return result
+
+    def path(self, kind):
+        self.names += 1
+        return f"{self.root}/{kind}-{self.names}"
+
+    def dfs(self, *args):
+        return self._run(["hdfs", "dfs", *args], "hdfs dfs " + args[0])
+
+    def to_hdfs(self, local):
+        local = Path(local).resolve()
+        if local in self.remote:
+            return self.remote[local]
+        if not self.started:
+            self.dfs("-mkdir", "-p", self.root)
+            self.started = True
+        remote = self.path("in")
+        self.dfs("-put", str(local), remote)
+        self.remote[local] = remote
+        return remote
+
+    def job(self, jar, driver_class, input_path, output_dir, driver_args):
+        if self.mode == "local":
+            options = ["-D", "mapreduce.framework.name=local", "-D", "fs.defaultFS=file:///"]
+            source, target = str(Path(input_path).resolve()), str(output_dir.resolve())
+        else:
+            options = ["-D", "mapreduce.framework.name=yarn"]
+            if not self.started:
+                self.dfs("-mkdir", "-p", self.root)
+                self.started = True
+            source = self.to_hdfs(input_path)
+            target = self.path("out")
+        command = ["hadoop", "jar", str(jar), driver_class, *options, source, target,
+                   *[str(arg) for arg in driver_args]]
+        result = self._run(command, f"Hadoop job {driver_class}")
+        if self.mode == "yarn":
+            output_dir.parent.mkdir(parents=True, exist_ok=True)
+            self.dfs("-get", target, str(output_dir))
+            self.remote[output_dir.resolve()] = target
+        return result
+
+    def cleanup(self):
+        if self.started:
+            self.dfs("-rm", "-r", "-skipTrash", self.root)
+            self.started = False
+
+
+RUNNER = None
+
+
 def run_hadoop_job(driver_class, input_path, output_dir, *driver_args):
-    """Execute one existing Java MapReduce driver locally."""
+    """Execute one existing Java MapReduce driver in the configured mode."""
     output_dir = Path(output_dir)
     jar_path = REPO_ROOT / "pipelines" / "mapreduce" / "build" / "mapreduce-parser.jar"
 
@@ -128,31 +203,7 @@ def run_hadoop_job(driver_class, input_path, output_dir, *driver_args):
             f"Hadoop output directory already exists: {output_dir}"
         )
 
-    command = [
-        "hadoop",
-        "jar",
-        str(jar_path),
-        driver_class,
-        str(Path(input_path).resolve()),
-        str(output_dir.resolve()),
-        *[str(arg) for arg in driver_args],
-    ]
-
-    result = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Hadoop job failed for {driver_class}.\\n"
-            f"Command: {' '.join(command)}\\n"
-            f"STDOUT:\\n{result.stdout}\\n"
-            f"STDERR:\\n{result.stderr}"
-        )
-
-    return result
+    return RUNNER.job(jar_path, driver_class, input_path, output_dir, driver_args)
 
 
 def run_q1(parsed_input, output_dir):
@@ -434,8 +485,10 @@ def main():
         engine_info()
         return 0
 
+    global RUNNER
     try:
         runtime = resolve_runtime(args)
+        RUNNER = HadoopRunner(hadoop_execution_mode(runtime["config"]))
         if not args.output_dir:
             raise ValueError("--output-dir is required for execution")
         inputs = runtime["inputs"]
@@ -508,6 +561,7 @@ def main():
             agg=work / "global-q2"; run_q2(merged, agg)
             global_top=run_top20(agg, work / "global-top20")
         q2_rows += [dict(batch_id=None, **r) for r in global_top]
+        RUNNER.cleanup()
         timings.append({"phase_name":"processing","duration_seconds":time.perf_counter()-process_start})
         outputs={"batches.jsonl":batch_rows,"daily_traffic.jsonl":q1_rows,"top_resources.jsonl":q2_rows,
                  "hourly_errors.jsonl":q3_rows,"malformed_samples.jsonl":samples}
@@ -517,7 +571,9 @@ def main():
         print(f"MapReduce completed: {len(batch_rows)} batches, {sum(x['record_count'] for x in batch_rows)} records; outputs: {out}")
 
     except Exception as exc:
-        print(f"MapReduce adapter initialization failed: {exc}", file=sys.stderr)
+        if RUNNER is not None and RUNNER.started:
+            print(f"MapReduce HDFS work path left for diagnosis: {RUNNER.root}", file=sys.stderr)
+        print(f"MapReduce adapter failed: {exc}", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         return 1
     return 0

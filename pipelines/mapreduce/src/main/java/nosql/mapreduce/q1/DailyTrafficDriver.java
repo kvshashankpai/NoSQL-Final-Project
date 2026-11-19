@@ -1,6 +1,7 @@
 package nosql.mapreduce.q1;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.util.GenericOptionsParser;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
@@ -10,6 +11,9 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 public class DailyTrafficDriver {
 
     public static void main(String[] args) throws Exception {
+        // Execution mode comes from -D options (the adapter) or the Hadoop site config.
+        Configuration configuration = new Configuration();
+        args = new GenericOptionsParser(configuration, args).getRemainingArgs();
 
         if (args.length != 2) {
             System.err.println(
@@ -18,12 +22,7 @@ public class DailyTrafficDriver {
             System.exit(1);
         }
 
-        Configuration configuration = new Configuration();
-
-        // Run Hadoop locally on the Mac
-        configuration.set("mapreduce.framework.name", "local");
         configuration.set("textinputformat.record.delimiter", "\n");
-        configuration.set("fs.defaultFS", "file:///");
 
         Job job = Job.getInstance(configuration, "Daily Traffic Analysis");
 
