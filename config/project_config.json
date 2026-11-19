@@ -39,7 +39,7 @@
       {
         "name": "MongoDB",
         "directory": "pipelines/mongodb",
-        "launcher": null
+        "launcher": ["{python}", "pipelines/mongodb/adapter.py"]
       },
       {
         "name": "Hive",
