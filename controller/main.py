@@ -137,7 +137,13 @@ def execute(pipeline, batch_size, inputs=None, output_dir=None, no_db=False, deb
             db.close(); db=None
         else:
             elapsed=time.perf_counter()-t0
-        print(f"SUCCESS: {pipeline}; {check.totals['total_records']} records; {elapsed:.3f}s" + (" (database not loaded)" if no_db else "; results stored in PostgreSQL"))
+        avg = check.totals["average_batch_size"]
+        avg_text = f"{avg:.1f}" if avg is not None else "0"
+        print(f"SUCCESS: {pipeline}; {check.totals['total_records']} records; "
+              f"{check.totals['total_batches']} batches; "
+              f"{check.totals['malformed_count']} malformed; "
+              f"average batch {avg_text}; {elapsed:.3f}s" +
+              (" (database not loaded)" if no_db else "; results stored in PostgreSQL"))
         return 0
     except Exception as exc:
         if db: db.close()
